@@ -1,9 +1,23 @@
 name: Lua Bindings
 
 # Preserve the Core Lua workflow matrix and LuaRocks test dependency setup.
-# The standalone module is built with CMake; rockspec adaptation belongs to #4.
+# Test the CMake build and the installed LuaRocks package independently.
 on:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      revision:
+        description: Exact Lua commit selected by the release gate
+        required: true
+        type: string
+      core_revision:
+        description: Immutable Core commit from the release request
+        required: true
+        type: string
+      release_version:
+        description: Requested numeric Lua release version
+        required: true
+        type: string
   push:
     branches: [main]
     tags: ['[0-9]*.[0-9]*.[0-9]*']
@@ -17,11 +31,13 @@ on:
       - 'scripts/**'
       - 'cmake/**'
       - 'CMakeLists.txt'
+      - '.gitignore'
       - 'opentlv-scm-1.rockspec'
       - '.github/workflows/lua.yml'
+      - '.github/workflows/release.yml'
 
 concurrency:
-  group: lua-${{ github.ref }}
+  group: lua-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -36,12 +52,34 @@ jobs:
       fail-fast: false
       matrix:
         # Exercise Windows setup on PRs too; manual and release runs include macOS.
-        os: ${{ fromJSON((startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && '["ubuntu-24.04", "windows-latest", "macos-latest"]' || '["ubuntu-24.04", "windows-latest"]') }}
+        os: ${{ fromJSON((inputs.revision != '' || startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && '["ubuntu-24.04", "windows-latest", "macos-latest"]' || '["ubuntu-24.04", "windows-latest"]') }}
         lua_version: ['5.1', '5.3', '5.4']
     runs-on: ${{ matrix.os }}
+    env:
+      RELEASE_LUA_SHA: ${{ inputs.revision }}
+      RELEASE_CORE_SHA: ${{ inputs.core_revision }}
+      RELEASE_VERSION: ${{ inputs.release_version }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.revision || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify release checkout
+        if: inputs.revision != ''
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          import subprocess
+          import sys
+          # Load the verifier from the trusted caller revision, not candidate code.
+          verifier = Path(os.environ['RUNNER_TEMP']) / 'lua-release.py'
+          verifier.write_bytes(subprocess.check_output([
+              'git', 'show', os.environ['GITHUB_SHA'] + ':scripts/release.py']))
+          subprocess.run([sys.executable, '-B', str(verifier), 'verify'], check=True)
 
       # gh-actions-lua builds Lua with cl on Windows, which needs the MSVC
       # environment.
@@ -148,12 +186,34 @@ jobs:
           exit 1
 
       - name: Build and run existing Lua tests and Query corpus
-        if: runner.os != 'Windows'
-        shell: bash
+        id: suite
+        # Runner defaults preserve pwsh on Windows and bash on Linux/macOS.
+        # In particular, Git Bash must not shadow MSVC's link.exe on Windows.
         run: python -B scripts/ci.py --lua-prefix .lua --build-dir build/ci
 
-      # Keep MSVC's link.exe ahead of the Git Bash Unix tool of the same name.
-      - name: Build and run existing Lua tests and Query corpus on Windows
+      - name: Check Lua version metadata
+        run: python -B tests/test_version.py
+
+      - name: Build and check the installed LuaRocks package
+        if: runner.os != 'Windows'
+        shell: bash
+        run: python -B scripts/check_luarocks.py --lua .lua/bin/lua --core-source build/ci/_deps/opentlv_core-src
+
+      - name: Build and check the installed LuaRocks package on Windows
         if: runner.os == 'Windows'
         shell: pwsh
-        run: python -B scripts/ci.py --lua-prefix .lua --build-dir build/ci
+        run: python -B scripts/check_luarocks.py --lua .lua/bin/lua.exe --core-source build/ci/_deps/opentlv_core-src
+
+      # Successful step names are available through the attempt-specific Jobs API;
+      # the release report can collect actual counts without uploading artifacts.
+      - name: "Gate evidence | Lua=${{ steps.suite.outputs.lua_sha }} | Core=${{ steps.suite.outputs.core_sha }} | CTest=${{ steps.suite.outputs.ctest_passed }}/${{ steps.suite.outputs.ctest_total }} | Busted=${{ steps.suite.outputs.busted_passed }} | Query=${{ steps.suite.outputs.query_fixtures }}/${{ steps.suite.outputs.query_checks }}"
+        if: inputs.revision != ''
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          import subprocess
+          import sys
+          verifier = Path(os.environ['RUNNER_TEMP']) / 'lua-release.py'
+          subprocess.run([sys.executable, '-B', str(verifier), 'verify',
+                          '--core-path', 'build/ci/_deps/opentlv_core-src'], check=True)

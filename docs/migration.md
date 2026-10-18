@@ -130,10 +130,29 @@ comparison results are recorded in [tests and CI](testing.md).
 | --- | --- |
 | Standalone CMake and external Core dependency | [opentlv-lua#2](https://github.com/OpenTLV/opentlv-lua/issues/2) |
 | Test execution, CI, and shared Query corpus integration | [opentlv-lua#3](https://github.com/OpenTLV/opentlv-lua/issues/3) |
-| LuaRocks adaptation, independent versioning, and release baseline | [opentlv-lua#4](https://github.com/OpenTLV/opentlv-lua/issues/4) |
+| LuaRocks adaptation, independent versioning, and manual release quality gate | [opentlv-lua#4](https://github.com/OpenTLV/opentlv-lua/issues/4) |
 | Core cleanup after standalone validation | [opentlv#633](https://github.com/OpenTLV/opentlv/issues/633) |
 | Portal documentation migration | [opentlv-docs#27](https://github.com/OpenTLV/opentlv-docs/issues/27) |
 
-The standalone changelog starts with the source import. Independent release
-versioning and the first standalone release baseline remain part of #4. Core
-sources and CI remain in place until the standalone migration is validated.
+The standalone changelog starts with the source import. Core sources and CI
+remain in place until the standalone migration is validated.
+
+## LuaRocks and versioning follow-up (#4)
+
+The rockspec now builds from the destination repository root and installs the
+same native `opentlv._core` and pure-Lua `opentlv` entry points. Its source URL
+is `https://github.com/OpenTLV/opentlv-lua.git`. The original inventory remains
+the record of the initial import, including the original rockspec's checksum.
+
+Lua versions derive only from this repository's numeric release tags. Versioning
+starts when the first tag `0.1.0` is added during quality-gate validation; until
+then the binding remains `scm`.
+The first standalone release baseline uses the source and dependency
+revision `d87dcf96b2707e817dd51163a9f9efa36651e929` recorded above. The
+[manual release quality gate](releases.md) reuses all nine Lua matrix jobs
+against an exact Lua candidate and verifies the pinned Core before creating
+only its Git tag. Implementing this workflow creates no real tag; the first
+`0.1.0` tag is reserved for the hosted quality-gate test. See [versioning](versioning.md) for
+build metadata, development/archive behavior, and the distinction between Lua
+release versions, LuaRocks packaging revisions, and the existing Core version
+reported by the Lua API.

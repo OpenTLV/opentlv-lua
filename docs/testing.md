@@ -32,17 +32,18 @@ fixture conversion, and assertions are preserved.
 | Events | Operating systems | Lua versions | Jobs |
 | --- | --- | --- | ---: |
 | Main branch pushes and relevant pull requests | Ubuntu 24.04, Windows latest | 5.1, 5.3, 5.4 | 6 |
-| Manual dispatch and numeric version tags | Ubuntu 24.04, Windows latest, macOS latest | 5.1, 5.3, 5.4 | 9 |
+| Manual dispatch, numeric version tags, and release workflow calls | Ubuntu 24.04, Windows latest, macOS latest | 5.1, 5.3, 5.4 | 9 |
 
 Lua 5.2 and LuaJIT remain supported runtimes but were not in the original CI
 matrix; this migration does not add matrix entries. The existing Lua action,
 LuaRocks setup, Windows shared Lua/MSVC configuration, dependency-install retry
-behavior, permissions, and concurrency policy are preserved.
+behavior, and read-only test permissions are preserved. Release workflow calls
+use the candidate SHA and full matrix; they keep their concurrency group
+separate from ordinary branch and tag CI.
 
 LuaRocks installs Busted and its dependencies for the selected Lua runtime.
-The module is built with standalone CMake while rockspec adaptation remains
-in #4. The old `luarocks make` packaging step is therefore not claimed as
-validated by this workflow.
+The workflow tests the standalone CMake build and separately builds and
+installs the rock into a fresh temporary tree with `luarocks make`.
 
 ## CI execution
 
@@ -68,7 +69,41 @@ CTest includes Busted, standalone Query/Document, codec, schema, writer,
 visitor, NFC and component tests, allocator failure checks, and all four
 existing examples. The additional Query corpus execution retains the original
 optimized/unoptimized, retained/streaming, input-window and Document checks.
-No test assertions, expected results, or testing frameworks are added.
+The migrated suite's assertions and expected results remain unchanged.
+
+After the existing suites, CI runs `python -B tests/test_version.py` against
+disposable Git repositories. These checks cover clean release tags, development
+commits, tracked/untracked changes, ambiguous tags, and source archives both
+inside and outside an enclosing repository.
+
+CI then invokes:
+
+```sh
+python -B scripts/check_luarocks.py --lua .lua/bin/lua \
+    --core-source build/ci/_deps/opentlv_core-src
+```
+
+Windows uses `.lua/bin/lua.exe`. The packaging check lints the rockspec,
+preconfigures `build/luarocks` with the same Core source tested above, and runs
+`luarocks make` from the repository root. It verifies both installed module
+files and matching version metadata. Lua runs from outside the checkout, with
+only that tree's module paths and no inherited Lua initialization settings,
+then checks module identity, preserved Core version reporting, and the existing
+quick-start example. The temporary tree includes spaces in its path and is
+removed when the check exits. No global rock installation is changed.
+
+For release workflow calls, the runner also verifies the requested Lua commit
+and canonical Core repository/pinned SHA. It records the actual completed
+CTest tests, Busted successes, Query fixtures, and Query checks. Successful
+evidence steps make these identities and counts available in the current
+Actions run; each matrix job writes a summary. The final release job verifies
+all nine jobs and required steps through the GitHub Actions API before creating
+a tag. It accepts evidence only from the current run attempt. See
+[release quality gates](releases.md) for the dispatch procedure and final report.
+
+Omit `--core-source` to exercise the rockspec's default Core selection with a
+fresh `build/luarocks` directory. LuaRocks must be configured for the interpreter
+passed to `--lua`; `--luarocks` can select an explicit executable.
 
 On Windows the workflow runs dependency installation and the CI runner from
 PowerShell so Git Bash's `link.exe` cannot shadow the MSVC linker. Python
@@ -124,8 +159,7 @@ Use the same interpreter, Busted dependencies, Core options, and corpus for
 both runs. Compare suite outcomes and Query fixture/check counts; the original
 and migrated generators should produce identical runner bytes on the same host.
 Record local results separately from hosted GitHub Actions results. Core cleanup
-remains in Core #633 after standalone validation, and LuaRocks packaging remains
-in #4.
+remains in Core #633 after standalone validation.
 
 ## Local migration validation
 
@@ -149,3 +183,52 @@ its matrix and setup commands were compared with the original workflow.
 These results do not establish a hosted CI pass. GitHub-hosted dependency setup,
 macOS, and Linux Lua 5.1/5.3 were not executed locally. The complete preserved
 matrix still needs a hosted run after publication; no hosted result is claimed.
+
+## Local LuaRocks and versioning validation (#4)
+
+LuaRocks 3.11.1 installed both modules and matching version metadata into fresh
+temporary trees with spaces in their paths. Loading took place outside the
+checkout using only installed module paths; module identity, existing Core
+version reporting (`0.7.1`), and the quick-start example passed in each run:
+
+| Environment | Lua | Core selection | Result |
+| --- | --- | --- | --- |
+| Windows x64, MSVC 19.44 | 5.1.5 | Explicit local migration revision | Pass |
+| Windows x64, MSVC 19.44 | 5.3.6 | Explicit local migration revision | Pass |
+| Windows x64, MSVC 19.44 | 5.4.8 | Explicit local migration revision | Pass |
+| Linux/WSL, GCC 13.3 | 5.4.6 | Default pinned remote fetch from a fresh source snapshot | Pass |
+
+All used Core `d87dcf96b2707e817dd51163a9f9efa36651e929`. The Linux source snapshot
+had no own Git identity and correctly installed `scm+unknown` metadata. The
+Windows development checkout installed `scm+g<sha>.dirty` metadata.
+
+The seven version tests passed on both Windows and Linux, including ignored
+CI tool directories not marking a tagged release dirty. The existing suite
+also passed on Windows Lua 5.4.8: 15/15 CTest tests, 78 Busted successes, and
+171 Query fixtures / 3422 backend-window checks. actionlint, Python syntax,
+local documentation links, and whitespace checks passed.
+
+These are local results. Hosted CI, macOS, Linux Lua 5.1/5.3, Lua 5.2, and
+LuaJIT were not run for the packaging validation above. The version tests
+create tags only in disposable fixtures. The added manual release workflow
+still requires a hosted quality-gate run; its first successful test will create
+the real `0.1.0` tag. No hosted gate or real tag creation is claimed by these
+local results.
+
+## Local release-gate validation (#4)
+
+The instrumented CI runner was rerun on Windows Lua 5.4.8. The existing suite
+passed with 15/15 CTest tests, 78 Busted successes, and 171 Query fixtures /
+3422 checks; the generated Actions outputs and summary contained those counts.
+
+Local API fixtures exercised successful complete evidence and rejected missing,
+duplicate, stale, skipped, cancelled, and mismatched evidence, malformed inputs,
+wrong branch/repository, mutable Core pins, existing annotated release tags,
+and tag-creation API failures. Rejected evidence produced a failure summary
+without requesting tag creation. The successful fixture requested only creation
+of the exact tag reference. These fixtures made no real remote mutations.
+
+The final workflows passed actionlint 1.7.7 without optional ShellCheck/pyflakes
+integrations. Python syntax, local documentation links, and whitespace checks
+also passed. These checks validate local control flow and reporting, not the
+hosted reusable-workflow integration or real tag creation.

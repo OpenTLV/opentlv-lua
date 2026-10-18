@@ -140,5 +140,62 @@ build alone therefore does not demonstrate a passing runtime suite. Set
 `OPENTLV_BUILD_LUA_TESTS=OFF` for a module-only build.
 
 See [tests and CI](testing.md) for the preserved CI matrix, the full test runner,
-and shared Core Query corpus execution. LuaRocks adaptation belongs to #4; the
-original rockspec is not yet a standalone installation command.
+and shared Core Query corpus execution.
+
+## LuaRocks installation
+
+Use LuaRocks configured for the same interpreter and development headers as the
+module. From this repository root:
+
+```sh
+luarocks make opentlv-scm-1.rockspec
+```
+
+This uses `build/luarocks`, disables the binding test targets, and retains the
+normal Core selection order documented above. The default fetched Core is
+static, so the installed module needs no separately deployed Core library.
+No sibling checkout is assumed. Git/network access is required if Core has not
+already been supplied. CMake and a compiler remain build prerequisites; the
+rock's runtime dependency remains `lua >= 5.1`.
+
+For a local Core override, preconfigure the same build directory before
+`luarocks make` (use `--fresh` when changing Lua ABI, compiler, or Core):
+
+```sh
+cmake --fresh -S . -B build/luarocks -DCMAKE_BUILD_TYPE=Release \
+    -DOPENTLV_BUILD_LUA_TESTS=OFF \
+    -DLUA_INCLUDE_DIR=/absolute/path/to/lua/include \
+    -DFETCHCONTENT_SOURCE_DIR_OPENTLV_CORE=/absolute/path/to/opentlv
+luarocks make opentlv-scm-1.rockspec
+```
+
+An installed Core can instead be selected with `opentlv_core_DIR` or
+`CMAKE_PREFIX_PATH` during that preconfiguration. When using a shared Core,
+its runtime library must also be available to the system loader, including
+on Windows; the rock installs the Lua module, not external shared libraries.
+
+To install into an isolated tree on Linux/macOS:
+
+```sh
+luarocks --tree="$PWD/build/rocks" make opentlv-scm-1.rockspec
+eval "$(luarocks --tree="$PWD/build/rocks" path)"
+lua -e 'assert(require("opentlv") == require("opentlv._core"))'
+```
+
+On Windows, run in an MSVC developer PowerShell with LuaRocks configured for
+MSVC and the interpreter's shared Lua DLL. The existing library discovery uses
+the `lib`/`bin` sibling of `LUA_INCDIR`; nonstandard layouts can preconfigure
+`LUA_LIBRARY` explicitly. Avoid Git Bash's Unix `link.exe` shadowing MSVC.
+
+```powershell
+$tree = Join-Path $PWD 'build/rocks'
+luarocks "--tree=$tree" make opentlv-scm-1.rockspec
+$env:LUA_PATH = (luarocks "--tree=$tree" path --lr-path)
+$env:LUA_CPATH = (luarocks "--tree=$tree" path --lr-cpath)
+lua -e 'assert(require("opentlv") == require("opentlv._core"))'
+```
+
+The rock installs `opentlv/_core.so` (or `.dll`) in LuaRocks' native module
+directory and `opentlv/init.lua` in its Lua source directory. It also stores
+`lua-version.json` in the versioned rock directory. See
+[independent versioning](versioning.md) for its meaning and release baseline.

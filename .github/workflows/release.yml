@@ -1,0 +1,79 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Marek Cingel
+name: Lua release gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: New Lua version/tag, e.g. 0.1.0 (no v prefix)
+        required: true
+        type: string
+      commit:
+        description: Exact 40-character Lua commit SHA already on main
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lua-release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Validate release request
+    runs-on: ubuntu-24.04
+    outputs:
+      sha: ${{ steps.request.outputs.lua_sha }}
+      core_sha: ${{ steps.request.outputs.core_sha }}
+      version: ${{ steps.request.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify repository, main ancestry, new tag and Core pin
+        id: request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_LUA_SHA: ${{ inputs.commit }}
+        run: python -B scripts/release.py prepare
+
+  full-ci:
+    name: Full Lua CI
+    needs: prepare
+    uses: ./.github/workflows/lua.yml
+    with:
+      revision: ${{ needs.prepare.outputs.sha }}
+      core_revision: ${{ needs.prepare.outputs.core_sha }}
+      release_version: ${{ needs.prepare.outputs.version }}
+
+  tag:
+    name: Report release gate and create tag
+    needs: [prepare, full-ci]
+    if: always() && needs.prepare.result == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      # Never execute candidate code with a write token. This is the original
+      # workflow revision on main, and the candidate must be its ancestor.
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Report exact attempt results and create only the validated Git tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+          RELEASE_LUA_SHA: ${{ needs.prepare.outputs.sha }}
+          RELEASE_CORE_SHA: ${{ needs.prepare.outputs.core_sha }}
+          PREPARE_RESULT: ${{ needs.prepare.result }}
+          FULL_CI_RESULT: ${{ needs.full-ci.result }}
+        run: python -B scripts/release.py finish
