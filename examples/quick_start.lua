@@ -2,7 +2,7 @@
 -- Copyright (c) 2026 Marek Cingel
 
 -- Write one Fixed-format element, then read it back through the public API.
--- Run with `lua examples/quick_start.lua` from bindings/lua.
+-- Run with `lua examples/quick_start.lua` from the opentlv-lua repository root.
 local opentlv = require("opentlv")
 
 local format = opentlv.formats.fixed(1, 1, "big")

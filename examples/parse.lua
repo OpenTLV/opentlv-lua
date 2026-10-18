@@ -8,8 +8,8 @@ truncated buffer surfaces as a structured error instead of a partial
 result. See the C, C++, Rust, JavaScript and Python "parse" examples for the
 same bytes and fields.
 
-Run with `lua examples/parse.lua` from `bindings/lua`, after building the
-native module (see ../README.md or docs/development/lua.md).
+Run with `lua examples/parse.lua` from the `opentlv-lua` repository root,
+after building the native module (see ../README.md or ../docs/development.md).
 ]]
 
 local opentlv = require("opentlv")

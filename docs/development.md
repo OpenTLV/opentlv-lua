@@ -21,6 +21,11 @@ toolchain. An existing sibling checkout is used only when explicitly selected.
 
 ## Local workspace Core
 
+The [optional workspace](https://github.com/OpenTLV/opentlv-workspace) opens
+`opentlv-lua` and `opentlv` as sibling repositories. Opening it does not configure
+a dependency; the explicit source override below selects the Core checkout.
+The same commands work without VS Code or the workspace repository.
+
 From this repository, supply an absolute path to the sibling Core checkout:
 
 ```sh
@@ -30,7 +35,7 @@ cmake --build build/local --target opentlv_lua --config Release
 ```
 
 The binding builds Core as a static library with position-independent code by
-default. The source dependency's C++, embedded Lua and other bindings, tests,
+default. The source dependency's C++ and in-tree bindings, tests,
 examples, documentation, benchmarks, and fuzzers are disabled. Core itself is
 not modified. Its public generated headers and include directories propagate
 through `OpenTLV::tlv`.
@@ -139,7 +144,8 @@ Without an interpreter, runtime tests are skipped. A successful configure or
 build alone therefore does not demonstrate a passing runtime suite. Set
 `OPENTLV_BUILD_LUA_TESTS=OFF` for a module-only build.
 
-See [tests and CI](testing.md) for the preserved CI matrix, the full test runner,
+See the [API guide](api.md) and [implementation notes](implementation.md) for
+usage and ownership. See [tests and CI](testing.md) for the preserved CI matrix, the full test runner,
 and shared Core Query corpus execution.
 
 ## LuaRocks installation

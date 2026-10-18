@@ -16,6 +16,9 @@ for element in opentlv.reader(data) do
 end
 ```
 
+See the [Lua API guide](docs/api.md) for usage and
+[implementation notes](docs/implementation.md) for ownership and error handling.
+
 ## Build
 
 Requires CMake 3.24 or newer, a C99 compiler, and Lua headers matching the
@@ -73,7 +76,7 @@ The standalone [Lua test workflow](.github/workflows/lua.yml) runs the existing
 test suites and shared Query corpus through the public Lua facade. See
 [tests, CI matrix, and baseline comparison](docs/testing.md) for prerequisites,
 ownership, and local execution.
-The preserved [original README](docs/migration/original-readme.md) describes the
+The preserved [original README](provenance/original-readme.md) describes the
 historical Core layout, not the standalone build.
 
 ## Repository layout
@@ -87,7 +90,8 @@ historical Core layout, not the standalone build.
 | `CMakeLists.txt` | Standalone binding build and existing test registration |
 | `opentlv-scm-1.rockspec` | Standalone LuaRocks build and installation metadata |
 | `.github/workflows/release.yml` | Manual quality gate and Git tag creation |
-| `docs/migration/` | Original README and source inventory |
+| `docs/migration/` | Initial source inventory |
+| `provenance/` | Byte-preserved historical README |
 
 The binding consumes the OpenTLV C API. Core remains responsible for shared
 architecture and native functionality. The standalone build supports both an
