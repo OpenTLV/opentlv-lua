@@ -123,6 +123,9 @@ shared Query corpus integration.
 
 ## Migration work ownership
 
+The #3 workflow, Query runner migration, original CI baseline, and local
+comparison results are recorded in [tests and CI](testing.md).
+
 | Work | Issue |
 | --- | --- |
 | Standalone CMake and external Core dependency | [opentlv-lua#2](https://github.com/OpenTLV/opentlv-lua/issues/2) |

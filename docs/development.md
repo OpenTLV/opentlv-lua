@@ -139,6 +139,6 @@ Without an interpreter, runtime tests are skipped. A successful configure or
 build alone therefore does not demonstrate a passing runtime suite. Set
 `OPENTLV_BUILD_LUA_TESTS=OFF` for a module-only build.
 
-Standalone CI and the shared Core Query corpus migration belong to #3.
-LuaRocks adaptation belongs to #4; the original rockspec is not yet a
-standalone installation command.
+See [tests and CI](testing.md) for the preserved CI matrix, the full test runner,
+and shared Core Query corpus execution. LuaRocks adaptation belongs to #4; the
+original rockspec is not yet a standalone installation command.
