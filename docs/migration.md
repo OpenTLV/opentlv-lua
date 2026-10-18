@@ -135,7 +135,7 @@ comparison results are recorded in [tests and CI](testing.md).
 | Portal documentation migration | [opentlv-docs#27](https://github.com/OpenTLV/opentlv-docs/issues/27) |
 
 The standalone changelog starts with the source import. Core sources and CI
-remain in place until the standalone migration is validated.
+were removed in [Core #633](https://github.com/OpenTLV/opentlv/issues/633).
 
 ## LuaRocks and versioning follow-up (#4)
 
@@ -156,3 +156,17 @@ only its Git tag. Implementing this workflow creates no real tag; the first
 build metadata, development/archive behavior, and the distinction between Lua
 release versions, LuaRocks packaging revisions, and the existing Core version
 reported by the Lua API.
+
+## Documentation ownership follow-up (opentlv-docs#27)
+
+The [API guide](api.md) and [implementation notes](implementation.md) were
+moved from Core commit `56b95a6754b4bd7210cc63252885db2c919f7178`
+(`docs/guides/lua.md` and `docs/development/lua.md`). API descriptions and
+examples are preserved; links and setup now use the standalone repository.
+The portal assembles these sources with the build, testing and versioning guides.
+Its documentation versions continue to follow Core, independently of Lua tags.
+
+The original README now resides at
+[provenance/original-readme.md](../provenance/original-readme.md), outside the
+published guides. Its bytes are unchanged. The initial source inventory above
+retains its original destination paths and hashes as an import record.
