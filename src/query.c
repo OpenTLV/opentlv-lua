@@ -6,7 +6,7 @@
 #include "error.h"
 #include "format.h"
 #include "program.h"
-#include "../../common/path_query.h"
+#include "path_query.h"
 
 #include <string.h>
 #include <limits.h>

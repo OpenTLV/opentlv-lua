@@ -18,8 +18,9 @@ rockspec content is modified in this step.
 
 Workspace integration is complete in
 [opentlv-workspace#28](https://github.com/OpenTLV/opentlv-workspace/issues/28).
-The source revision above is the provenance baseline, not a Lua release version
-or a decision about the remote dependency pin for the future standalone build.
+The source revision above records provenance, not a Lua release version. The
+initial import did not select a remote dependency pin; the standalone build
+follow-up below records that decision.
 
 ## Source inventory
 
@@ -79,7 +80,48 @@ Its shared Query corpus integration is outside `bindings/lua/` and remains in
 Core during this source import. Issue #3 must resolve that dependency while
 preserving the existing Lua facade coverage and Core test ownership.
 
-## Follow-up ownership
+## Standalone build follow-up (#2)
+
+The standalone build pins the same Core commit as the source import. It adapts
+`CMakeLists.txt` and reads optional components from the selected Core's public
+generated configuration. See [development instructions](development.md).
+
+Two headers used by the original Lua sources lived outside `bindings/lua/`.
+They are now retained locally, byte-for-byte from the same source commit:
+
+| Original path | Destination | SHA-256 |
+| --- | --- | --- |
+| `bindings/common/path_query.h` | `src/path_query.h` | `f6a328b062e6e22d61c644b7de0b6ce51e4e3b6bb23ecdbf0ba5b85d89d9ee2a` |
+| `bindings/common/query_schema.h` | `src/query_schema.h` | `7abe853c2eb5269b8bbaf7569c644e8d370fe790a1e056aefac62c0d543aa2e8` |
+
+Only the include paths in `query.c` and `program.c` change. These helpers adapt
+binding diagnostics and owning workspace storage through public C APIs; they
+contain no private Core engine implementation. The initial #1 inventory remains
+unchanged as the historical import record.
+
+Local validation for #2 used the recorded Core commit and existing tests:
+
+| Environment | Core selection | Result |
+| --- | --- | --- |
+| Windows x64, MSVC 19.44, Lua 5.4.8 | Local static / installed static | 15/15 tests each |
+| Linux (WSL), GCC 13.3, Lua 5.4.6 | Local static / relocated installed static / remote pinned static | 15/15 tests each |
+| Linux (WSL), GCC 13.3, Lua 5.4.6 | Local shared | 15/15 tests |
+| Linux (WSL), GCC 13.3, Lua 5.4.6 | Local / installed static, Document and optional formats disabled | 13/13 tests each |
+
+The checks also verified both module names load the same module, no C++ compiler
+is configured, an explicit source override takes precedence over an installed
+package, installed component selection ignores contradictory consumer cache
+options, and missing required Reader capability fails during configuration.
+The reduced configurations intentionally skip the Busted suite and BER parsing
+example under the original registration rules. CMake versions were 3.31.7 on
+Windows and 3.28.3 on Linux.
+
+macOS, other Lua ABIs, installed shared Core on Windows, and hosted CI were not
+executed in this validation. macOS linking and Lua compatibility code remain
+unchanged. This is local build validation; #3 still owns hosted CI and the
+shared Query corpus integration.
+
+## Migration work ownership
 
 | Work | Issue |
 | --- | --- |
