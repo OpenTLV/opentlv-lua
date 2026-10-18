@@ -1,0 +1,6 @@
+{
+  "binding_version": "@_version@",
+  "binding_revision": "@_revision@",
+  "release_tag": "@_tag@",
+  "dirty": @_dirty@
+}

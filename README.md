@@ -37,6 +37,28 @@ no C++ compiler. The workspace is optional.
 See [development instructions](docs/development.md) for package selection,
 Lua discovery, module loading, component configuration, and test prerequisites.
 
+## LuaRocks
+
+With LuaRocks configured for the target Lua runtime, build and install from
+the repository root:
+
+```sh
+luarocks make opentlv-scm-1.rockspec
+lua -e 'assert(require("opentlv") == require("opentlv._core"))'
+```
+
+The LuaRocks tree must be on Lua's search paths. See the
+[installation instructions](docs/development.md#luarocks-installation) for an
+isolated tree, Windows requirements, and explicit Core selection.
+The rock installs both modules and Lua binding version metadata. Lua release
+tags are independent of Core; `opentlv.version()` and `opentlv._VERSION`
+continue to report Core. See [versioning](docs/versioning.md).
+
+The manual [release quality gate](docs/releases.md) tests an exact Lua commit
+against the pinned Core across all nine OS/Lua combinations before creating
+its numeric Git tag. The first release version is `0.1.0`; the workflow creates
+only the tag, with results recorded in the Actions summary.
+
 ## Migration status
 
 The initial sources were imported from OpenTLV Core commit
@@ -45,8 +67,8 @@ The standalone CMake build uses that same revision as its remote dependency pin.
 See [migration provenance](docs/migration.md) for the original inventory and the
 additional shared binding helpers required by the standalone build.
 
-The rockspec still contains the original monorepo paths; `luarocks make` from
-this repository awaits [LuaRocks and versioning #4](https://github.com/OpenTLV/opentlv-lua/issues/4).
+The rockspec builds directly from this standalone repository and retains the
+existing package name `opentlv` and development rock version `scm-1`.
 The standalone [Lua test workflow](.github/workflows/lua.yml) runs the existing
 test suites and shared Query corpus through the public Lua facade. See
 [tests, CI matrix, and baseline comparison](docs/testing.md) for prerequisites,
@@ -63,7 +85,8 @@ historical Core layout, not the standalone build.
 | `examples/` | Existing Lua examples |
 | `tests/` | Existing Lua tests and native failing allocator helper |
 | `CMakeLists.txt` | Standalone binding build and existing test registration |
-| `opentlv-scm-1.rockspec` | Original LuaRocks build metadata awaiting adaptation |
+| `opentlv-scm-1.rockspec` | Standalone LuaRocks build and installation metadata |
+| `.github/workflows/release.yml` | Manual quality gate and Git tag creation |
 | `docs/migration/` | Original README and source inventory |
 
 The binding consumes the OpenTLV C API. Core remains responsible for shared

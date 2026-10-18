@@ -4,6 +4,15 @@
 cmake_minimum_required(VERSION 3.24)
 project(OpenTLVLua LANGUAGES C)
 
+set(LUA_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}")
+set(LUA_BINARY "${CMAKE_CURRENT_BINARY_DIR}")
+include(cmake/GenerateVersion.cmake)
+add_custom_target(opentlv_lua_version
+    COMMAND "${CMAKE_COMMAND}" "-DLUA_SOURCE=${LUA_SOURCE}" "-DLUA_BINARY=${LUA_BINARY}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateVersion.cmake"
+    BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/lua-version.json"
+    VERBATIM)
+
 include(cmake/Core.cmake)
 
 # Only the headers are required on every platform; LUA_LIBRARIES is only
@@ -71,6 +80,7 @@ if(OPENTLV_LUA_CORE_LLDP)
 endif()
 
 target_include_directories(opentlv_lua PRIVATE ${LUA_INCLUDE_DIR})
+add_dependencies(opentlv_lua opentlv_lua_version)
 target_link_libraries(opentlv_lua PRIVATE OpenTLV::tlv)
 target_compile_features(opentlv_lua PRIVATE c_std_99)
 option(OPENTLV_WARNINGS_AS_ERRORS "Treat OpenTLV compiler warnings as errors" ON)
