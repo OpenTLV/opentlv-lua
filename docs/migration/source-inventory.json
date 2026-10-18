@@ -1,0 +1,277 @@
+{
+  "source_repository": "https://github.com/OpenTLV/opentlv",
+  "source_commit": "d87dcf96b2707e817dd51163a9f9efa36651e929",
+  "source_directory": "bindings/lua",
+  "files": [
+    {
+      "source": "bindings/lua/CMakeLists.txt",
+      "destination": "CMakeLists.txt",
+      "sha256": "fddc6bbb7faeaf51359478bed6f761c4dc9ed9c589272a3e10beee7dc433669f"
+    },
+    {
+      "source": "bindings/lua/README.md",
+      "destination": "docs/migration/original-readme.md",
+      "sha256": "04533a7084de5174f8aed19ca8fa2d98959953d4a7d3a4148a7881b4b13ec885"
+    },
+    {
+      "source": "bindings/lua/examples/codec.lua",
+      "destination": "examples/codec.lua",
+      "sha256": "136b62fd5c484caa9a747ac7db864c57c30a67920a27e3d01de9aa89db088051"
+    },
+    {
+      "source": "bindings/lua/examples/parse.lua",
+      "destination": "examples/parse.lua",
+      "sha256": "9c5cd06f4fb25f18d67d4d1e68b35fd505765afd17a20c4817e9191a5fdd03e9"
+    },
+    {
+      "source": "bindings/lua/examples/quick_start.lua",
+      "destination": "examples/quick_start.lua",
+      "sha256": "6234ec3d385fc77c3b5256cc6e2601c25ec87941b1ee7b17ed413e73e90fce9f"
+    },
+    {
+      "source": "bindings/lua/examples/schema.lua",
+      "destination": "examples/schema.lua",
+      "sha256": "65bc543f2f9a0dc7c8a0dd6f23ac1516be652c64a89b718f71b4752a49728483"
+    },
+    {
+      "source": "bindings/lua/lua/opentlv/init.lua",
+      "destination": "lua/opentlv/init.lua",
+      "sha256": "88589267d39baf6d53858503773d3c27f0c3faf77fa2f3a83bc06a4eabc21232"
+    },
+    {
+      "source": "bindings/lua/opentlv-scm-1.rockspec",
+      "destination": "opentlv-scm-1.rockspec",
+      "sha256": "9e5ad48480cd74f199fa087a6e994b9fcb3e7dd1cd36e985c08386ff7f08264a"
+    },
+    {
+      "source": "bindings/lua/src/codec.c",
+      "destination": "src/codec.c",
+      "sha256": "604e7fbcfa4a079806cb407781340a5023f848f4e7b2c56fbe13bb458e35b5b2"
+    },
+    {
+      "source": "bindings/lua/src/codec.h",
+      "destination": "src/codec.h",
+      "sha256": "d229fa65ca2a0ae821594cd13a34f4a3d50fd3b808996526e2667afca79236a2"
+    },
+    {
+      "source": "bindings/lua/src/codec_builtin.c",
+      "destination": "src/codec_builtin.c",
+      "sha256": "a477e7a10f5880ab82b6e22e9ac78f90d8c51098d55d7e7f623eefdd27f497dd"
+    },
+    {
+      "source": "bindings/lua/src/common.c",
+      "destination": "src/common.c",
+      "sha256": "0e0800ed00eaa521d3391965929ba7174c1efedd0aabe606c91b0e765e7da41c"
+    },
+    {
+      "source": "bindings/lua/src/common.h",
+      "destination": "src/common.h",
+      "sha256": "fe0d1d0e9d397d1b2e329682cc1ca225957f216d8b3aa4b4280f022d0997782e"
+    },
+    {
+      "source": "bindings/lua/src/compat.h",
+      "destination": "src/compat.h",
+      "sha256": "ca11c87d100d214ce9026a82607cf53c63d1f3214f80c1fe5b644b916b5dc851"
+    },
+    {
+      "source": "bindings/lua/src/document.c",
+      "destination": "src/document.c",
+      "sha256": "ee256b81a451104a69974981a39f7fc66a03f22e738cb2016b4dc7a532151f53"
+    },
+    {
+      "source": "bindings/lua/src/document.h",
+      "destination": "src/document.h",
+      "sha256": "6cb83117da2f582ea2d440799d61407df0807c183d891e3cf2ddd705215e5356"
+    },
+    {
+      "source": "bindings/lua/src/error.c",
+      "destination": "src/error.c",
+      "sha256": "4e503a776f16c80b986bc053935884a64f698f4e28917a7fa12253936e6ab373"
+    },
+    {
+      "source": "bindings/lua/src/error.h",
+      "destination": "src/error.h",
+      "sha256": "d168c4688e5b93c2236bcb1acc01e4f8c45413d9ac44b57c6b2fa0ee9e95f3f2"
+    },
+    {
+      "source": "bindings/lua/src/format.c",
+      "destination": "src/format.c",
+      "sha256": "dbcf288ff8f508cde952e2bfd80363e73e0975e5181797bac8164b844525a635"
+    },
+    {
+      "source": "bindings/lua/src/format.h",
+      "destination": "src/format.h",
+      "sha256": "c35474a15f46bf7021a9bb877439d083b5fc7a438824c2a3b8ef91b5136e09fd"
+    },
+    {
+      "source": "bindings/lua/src/formats/ber.c",
+      "destination": "src/formats/ber.c",
+      "sha256": "8262ba03bc1934778e70ad238dcf27b115f9002aa7709544fed74834f94572ea"
+    },
+    {
+      "source": "bindings/lua/src/formats/bluetooth_ltv.c",
+      "destination": "src/formats/bluetooth_ltv.c",
+      "sha256": "bc5f53984c060363a3995cb1b7d99f9f5baefa61ef2ac491f557d3322e0b4ba5"
+    },
+    {
+      "source": "bindings/lua/src/formats/cer.c",
+      "destination": "src/formats/cer.c",
+      "sha256": "02417bd0643733a814a8d1b9af0f3165f4f705ae3374cc1b5b48dce69c2282a9"
+    },
+    {
+      "source": "bindings/lua/src/formats/der.c",
+      "destination": "src/formats/der.c",
+      "sha256": "7fdc1135df0d1add97f2efadfa19cce543506c4e3c1507ba141cf38b36fc00e7"
+    },
+    {
+      "source": "bindings/lua/src/formats/emv.c",
+      "destination": "src/formats/emv.c",
+      "sha256": "fd5671dd2ad851a3c9b8db2fd59e7f66f5f978f8d64a77706b355ac3d796a399"
+    },
+    {
+      "source": "bindings/lua/src/formats/fixed.c",
+      "destination": "src/formats/fixed.c",
+      "sha256": "e51285cc38136d351da684585b953fcd29a9fc3fa98643222848ee5eacdd6c66"
+    },
+    {
+      "source": "bindings/lua/src/formats/lldp.c",
+      "destination": "src/formats/lldp.c",
+      "sha256": "645b909fc0561364287f3daa6d4a8425921b54d8f23286878bad13b8390cc4ce"
+    },
+    {
+      "source": "bindings/lua/src/formats/nfc_type2.c",
+      "destination": "src/formats/nfc_type2.c",
+      "sha256": "d39dc96d03abbe496d1b44a9f93ec8d0569316c02fa9441e94a5f9588458233a"
+    },
+    {
+      "source": "bindings/lua/src/module.c",
+      "destination": "src/module.c",
+      "sha256": "3e0c13fc0a81198d2656ea8391581881726f164ab2355228d6d48ad37c740ab6"
+    },
+    {
+      "source": "bindings/lua/src/program.c",
+      "destination": "src/program.c",
+      "sha256": "52eb6f9fa985ffc8c92c9346e5ad612d2b5474e813f5c6ec71a24a5c10596320"
+    },
+    {
+      "source": "bindings/lua/src/program.h",
+      "destination": "src/program.h",
+      "sha256": "3a6b379e1e05686e17c3627d835c5135b6497f4806915c4b48d00d54a28a968a"
+    },
+    {
+      "source": "bindings/lua/src/query.c",
+      "destination": "src/query.c",
+      "sha256": "d0aa2b6095b5821d773e543f09f342b27c0271a9621f98fe15cba51fc1efa0f1"
+    },
+    {
+      "source": "bindings/lua/src/query.h",
+      "destination": "src/query.h",
+      "sha256": "1f91afdd760fd65d943c4e495e5261dc0628c8e4373d584ce0f365d29c454467"
+    },
+    {
+      "source": "bindings/lua/src/reader.c",
+      "destination": "src/reader.c",
+      "sha256": "9f1b7ffddbd43495e7db1fee485d5b715bd135e71925d972d8f209f2251a7e74"
+    },
+    {
+      "source": "bindings/lua/src/reader.h",
+      "destination": "src/reader.h",
+      "sha256": "11875e62327690244934c401edb7062d962e600b201141c2891bf98b1112141d"
+    },
+    {
+      "source": "bindings/lua/src/schema.c",
+      "destination": "src/schema.c",
+      "sha256": "6617d392223f98c85b11781f7315043c44844a73f8f61ea578edbf07cabaf0c0"
+    },
+    {
+      "source": "bindings/lua/src/schema.h",
+      "destination": "src/schema.h",
+      "sha256": "2b79f384b157196c7d66501fd0b8ea5861f5db8a6b51501ca95519b4c44cd553"
+    },
+    {
+      "source": "bindings/lua/src/visitor.c",
+      "destination": "src/visitor.c",
+      "sha256": "7328a8bcc2b9fc71ce7364726063c8e9368d613cecac11c06386d3dc4a74ffa1"
+    },
+    {
+      "source": "bindings/lua/src/visitor.h",
+      "destination": "src/visitor.h",
+      "sha256": "f5586c2eb4767e7940d95fda6d29d4f26151637cd0b6e342ded75205e6543b05"
+    },
+    {
+      "source": "bindings/lua/src/writer.c",
+      "destination": "src/writer.c",
+      "sha256": "124b8d61e6b33735a0726721e926ba8926167f39c23c5310e2071b72a1264d2d"
+    },
+    {
+      "source": "bindings/lua/src/writer.h",
+      "destination": "src/writer.h",
+      "sha256": "c4ea470d32d1956f7d4f8e7e896c4aa3dbc63ac8db46f06744c7cb5219073760"
+    },
+    {
+      "source": "bindings/lua/tests/codec_spec.lua",
+      "destination": "tests/codec_spec.lua",
+      "sha256": "14a98d44fcf3fa8f67952df0c6cb7657034afb9728a41ed08c15a6eb41e153b5"
+    },
+    {
+      "source": "bindings/lua/tests/components.lua",
+      "destination": "tests/components.lua",
+      "sha256": "0cf1548a48f07c247c24467ca125e8fed9a1f2831f6bd85ad6c700d04e043c69"
+    },
+    {
+      "source": "bindings/lua/tests/error_spec.lua",
+      "destination": "tests/error_spec.lua",
+      "sha256": "83ee22f1d6fb26b21ce0f75f54e3f101b008aa4b356fefd9848bb1daaa16583f"
+    },
+    {
+      "source": "bindings/lua/tests/failing_allocator.c",
+      "destination": "tests/failing_allocator.c",
+      "sha256": "72b633daee477d1b7e4fa5357b19b4f4d1fc5ae2941e1d16f792a1bb064adcd6"
+    },
+    {
+      "source": "bindings/lua/tests/format_spec.lua",
+      "destination": "tests/format_spec.lua",
+      "sha256": "1e086591904a1556e6822374c67311e4803fc0465a1821240eea79943fcdc47c"
+    },
+    {
+      "source": "bindings/lua/tests/module_spec.lua",
+      "destination": "tests/module_spec.lua",
+      "sha256": "adac67ec2c2de750ab13878db40259015d5090966a7afd0a19538ea1da660845"
+    },
+    {
+      "source": "bindings/lua/tests/nfc_type2.lua",
+      "destination": "tests/nfc_type2.lua",
+      "sha256": "cef187578910e89938e3d1701eab5787d83a156c8d31009eca10782ff9d19c26"
+    },
+    {
+      "source": "bindings/lua/tests/program_spec.lua",
+      "destination": "tests/program_spec.lua",
+      "sha256": "6edb9a86bfe0d44c76a6a113fb69ec7dfaa6a59d7486062a166659199648f711"
+    },
+    {
+      "source": "bindings/lua/tests/query_document_spec.lua",
+      "destination": "tests/query_document_spec.lua",
+      "sha256": "553863af6a22c90c84197db05b821393bfc934a753f8a1a7ef08de174c3fe016"
+    },
+    {
+      "source": "bindings/lua/tests/reader_spec.lua",
+      "destination": "tests/reader_spec.lua",
+      "sha256": "77499cf475e8eff2d8f09b2d5dcd6c69cbd39b2d28b19a6e2284bbfd7a3692dd"
+    },
+    {
+      "source": "bindings/lua/tests/schema_spec.lua",
+      "destination": "tests/schema_spec.lua",
+      "sha256": "0a05b90303fd6e4f16d060797992fcda3c5f6d1e2a1c6c46bedc8d09e2e01662"
+    },
+    {
+      "source": "bindings/lua/tests/visitor_spec.lua",
+      "destination": "tests/visitor_spec.lua",
+      "sha256": "5c1d23e5b9e3730810f98461b178f0d05a160b6933a3e65b3e0b0553875e6b9b"
+    },
+    {
+      "source": "bindings/lua/tests/writer_spec.lua",
+      "destination": "tests/writer_spec.lua",
+      "sha256": "daa7dcb7d9eaff35b273645b6e6aeb35ad3adea686e43f74c9f3e4bb5c399020"
+    }
+  ]
+}
