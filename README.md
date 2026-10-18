@@ -16,27 +16,41 @@ for element in opentlv.reader(data) do
 end
 ```
 
+## Build
+
+Requires CMake 3.24 or newer, a C99 compiler, and Lua headers matching the
+interpreter used to load the module. Windows also requires that interpreter's
+shared Lua import library. Clang builds retain the Core requirement of Clang 18
+or newer.
+
+```sh
+cmake -S . -B build/local -DCMAKE_BUILD_TYPE=Release \
+    -DFETCHCONTENT_SOURCE_DIR_OPENTLV_CORE=/absolute/path/to/opentlv
+cmake --build build/local --target opentlv_lua --config Release
+ctest --test-dir build/local -C Release --output-on-failure
+```
+
+Omit the source override to use an installed Core package or fetch the pinned
+Core revision automatically. The binding links only `OpenTLV::tlv` and requires
+no C++ compiler. The workspace is optional.
+
+See [development instructions](docs/development.md) for package selection,
+Lua discovery, module loading, component configuration, and test prerequisites.
+
 ## Migration status
 
-This repository contains the unchanged Lua binding sources, tests, examples,
-and build metadata imported from OpenTLV Core commit
+The initial sources were imported from OpenTLV Core commit
 [`d87dcf96b2707e817dd51163a9f9efa36651e929`](https://github.com/OpenTLV/opentlv/tree/d87dcf96b2707e817dd51163a9f9efa36651e929/bindings/lua).
-See [migration provenance and verification](docs/migration.md) for the complete
-source inventory and scope of this import.
+The standalone CMake build uses that same revision as its remote dependency pin.
+See [migration provenance](docs/migration.md) for the original inventory and the
+additional shared binding helpers required by the standalone build.
 
-The imported `CMakeLists.txt` still expects the Core parent build, and the
-rockspec still contains the original monorepo paths. **Standalone builds and
-`luarocks make` from this repository are not ready yet.** They are tracked in
-[standalone CMake #2](https://github.com/OpenTLV/opentlv-lua/issues/2) and
-[LuaRocks and versioning #4](https://github.com/OpenTLV/opentlv-lua/issues/4).
-[Test and CI migration #3](https://github.com/OpenTLV/opentlv-lua/issues/3)
-will establish standalone test execution and CI.
-
-Until those steps are complete, use the
-[original Core checkout and instructions](https://github.com/OpenTLV/opentlv/tree/d87dcf96b2707e817dd51163a9f9efa36651e929/bindings/lua)
-to build and run the binding. The preserved
-[original README](docs/migration/original-readme.md) describes that Core layout;
-its relative links and commands are historical, not standalone instructions.
+The rockspec still contains the original monorepo paths; `luarocks make` from
+this repository awaits [LuaRocks and versioning #4](https://github.com/OpenTLV/opentlv-lua/issues/4).
+Existing CMake tests can run locally; standalone CI and shared Query corpus
+integration remain in [test and CI migration #3](https://github.com/OpenTLV/opentlv-lua/issues/3).
+The preserved [original README](docs/migration/original-readme.md) describes the
+historical Core layout, not the standalone build.
 
 ## Repository layout
 
@@ -46,14 +60,13 @@ its relative links and commands are historical, not standalone instructions.
 | `lua/opentlv/` | Pure-Lua public entry point |
 | `examples/` | Existing Lua examples |
 | `tests/` | Existing Lua tests and native failing allocator helper |
-| `CMakeLists.txt` | Original Core-dependent binding build and test registration |
+| `CMakeLists.txt` | Standalone binding build and existing test registration |
 | `opentlv-scm-1.rockspec` | Original LuaRocks build metadata awaiting adaptation |
 | `docs/migration/` | Original README and source inventory |
 
 The binding consumes the OpenTLV C API. Core remains responsible for shared
-architecture and native functionality. The workspace is optional; the planned
-standalone build will support both an external Core dependency and a local
-sibling Core checkout.
+architecture and native functionality. The standalone build supports both an
+external Core dependency and an explicit local sibling Core checkout.
 
 ## License
 

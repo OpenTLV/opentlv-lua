@@ -16,7 +16,7 @@
 #endif
 #include <string.h>
 #include <limits.h>
-#include "../../common/query_schema.h"
+#include "query_schema.h"
 
 #define PROGRAM_MT "opentlv.QueryProgram"
 #define EXECUTION_MT "opentlv.QueryExecution"

@@ -1,16 +1,10 @@
-# Experimental Lua binding: the OpenTLV C core plus a native extension
-# module (src/) exposing Reader, Writer, Tree Writer, Schema, Query, Document,
-# Element, Tag and traversal to Lua 5.1
-# through 5.4 and LuaJIT, and a one-line pure-Lua entry point (lua/) that
-# `require("opentlv")` resolves to — the same native/pure split as the
-# Python opentlv-core/opentlv and Rust opentlv-sys/opentlv packages.
-# Included only when OPENTLV_BUILD_LUA=ON, so native C/C++ builds never see
-# it.
-#
-#   cmake -S . -B build-lua -DOPENTLV_BUILD_LUA=ON -DCMAKE_BUILD_TYPE=Release \
-#       -DOPENTLV_BUILD_CXX=OFF -DOPENTLV_BUILD_TESTS=OFF \
-#       -DOPENTLV_BUILD_EXAMPLES=OFF
-#   cmake --build build-lua --target opentlv_lua
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Marek Cingel
+
+cmake_minimum_required(VERSION 3.24)
+project(OpenTLVLua LANGUAGES C)
+
+include(cmake/Core.cmake)
 
 # Only the headers are required on every platform; LUA_LIBRARIES is only
 # needed (and only linked) on Windows, so this deliberately does not pass
@@ -38,6 +32,8 @@ add_library(opentlv_lua MODULE
     src/reader.h
     src/query.c
     src/query.h
+    src/path_query.h
+    src/query_schema.h
     src/program.c
     src/program.h
     src/document.h
@@ -49,34 +45,51 @@ add_library(opentlv_lua MODULE
     src/visitor.h
     src/compat.h
 )
-if(OPENTLV_DOCUMENT)
+if(OPENTLV_LUA_CORE_DOCUMENT)
     target_sources(opentlv_lua PRIVATE src/document.c)
 endif()
-if(OPENTLV_FORMAT_BER)
+if(OPENTLV_LUA_CORE_FORMAT_BER)
     target_sources(opentlv_lua PRIVATE src/formats/ber.c)
 endif()
-if(OPENTLV_FORMAT_CER)
+if(OPENTLV_LUA_CORE_FORMAT_CER)
     target_sources(opentlv_lua PRIVATE src/formats/cer.c)
 endif()
-if(OPENTLV_FORMAT_DER)
+if(OPENTLV_LUA_CORE_FORMAT_DER)
     target_sources(opentlv_lua PRIVATE src/formats/der.c)
 endif()
-if(OPENTLV_BLUETOOTH)
+if(OPENTLV_LUA_CORE_BLUETOOTH)
     target_sources(opentlv_lua PRIVATE src/formats/bluetooth_ltv.c)
 endif()
-if(OPENTLV_EMV)
+if(OPENTLV_LUA_CORE_EMV)
     target_sources(opentlv_lua PRIVATE src/formats/emv.c)
 endif()
-if(OPENTLV_NFC)
+if(OPENTLV_LUA_CORE_NFC)
     target_sources(opentlv_lua PRIVATE src/formats/nfc_type2.c)
 endif()
-if(OPENTLV_LLDP)
+if(OPENTLV_LUA_CORE_LLDP)
     target_sources(opentlv_lua PRIVATE src/formats/lldp.c)
 endif()
 
 target_include_directories(opentlv_lua PRIVATE ${LUA_INCLUDE_DIR})
-target_link_libraries(opentlv_lua PRIVATE tlv)
-opentlv_configure_compiler(opentlv_lua)
+target_link_libraries(opentlv_lua PRIVATE OpenTLV::tlv)
+target_compile_features(opentlv_lua PRIVATE c_std_99)
+option(OPENTLV_WARNINGS_AS_ERRORS "Treat OpenTLV compiler warnings as errors" ON)
+if(CMAKE_C_COMPILER_ID STREQUAL "Clang" AND CMAKE_C_COMPILER_VERSION VERSION_LESS 18)
+    message(FATAL_ERROR "OpenTLV requires Clang 18 or newer.")
+endif()
+target_compile_options(opentlv_lua PRIVATE
+    "$<$<C_COMPILER_ID:Clang>:-Wall;-Wextra;-Wpedantic;-Wstrict-prototypes>"
+    "$<$<AND:$<BOOL:${OPENTLV_WARNINGS_AS_ERRORS}>,$<C_COMPILER_ID:GNU,Clang>>:-Werror>"
+    "$<$<AND:$<BOOL:${OPENTLV_WARNINGS_AS_ERRORS}>,$<C_COMPILER_ID:MSVC>>:/WX>"
+)
+# A shared Core needs its runtime beside the module on Windows.
+get_target_property(_core_type OpenTLV::tlv TYPE)
+if(WIN32 AND _core_type STREQUAL "SHARED_LIBRARY")
+    add_custom_command(TARGET opentlv_lua POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "$<TARGET_FILE:OpenTLV::tlv>" "$<TARGET_FILE_DIR:opentlv_lua>"
+        VERBATIM)
+endif()
 
 if(WIN32)
     # Windows DLLs must resolve every imported symbol at link time; there is
@@ -159,6 +172,7 @@ endif()
 
 option(OPENTLV_BUILD_LUA_TESTS "Register the busted test suite and examples for the Lua binding" ON)
 if(OPENTLV_BUILD_LUA_TESTS)
+    enable_testing()
     add_library(opentlv_lua_test_allocator MODULE tests/failing_allocator.c)
     add_dependencies(opentlv_lua opentlv_lua_test_allocator)
     target_include_directories(opentlv_lua_test_allocator PRIVATE ${LUA_INCLUDE_DIR} src)
@@ -187,8 +201,8 @@ if(OPENTLV_BUILD_LUA_TESTS)
 
     # The existing suite exercises all original presets. Reduced builds use
     # the configuration-aware smoke test below.
-    if(OPENTLV_BUSTED_EXECUTABLE AND OPENTLV_FORMAT_BER AND OPENTLV_FORMAT_CER
-       AND OPENTLV_FORMAT_DER AND OPENTLV_BLUETOOTH)
+    if(OPENTLV_BUSTED_EXECUTABLE AND OPENTLV_LUA_CORE_FORMAT_BER AND OPENTLV_LUA_CORE_FORMAT_CER
+       AND OPENTLV_LUA_CORE_FORMAT_DER AND OPENTLV_LUA_CORE_BLUETOOTH)
         add_test(NAME Integration_lua
             COMMAND ${OPENTLV_BUSTED_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests")
         set_tests_properties(Integration_lua PROPERTIES
@@ -247,9 +261,9 @@ if(OPENTLV_BUILD_LUA_TESTS)
         add_test(NAME Integration_lua_components
             COMMAND ${OPENTLV_LUA_EXECUTABLE}
                 "${CMAKE_CURRENT_SOURCE_DIR}/tests/components.lua"
-                $<BOOL:${OPENTLV_FORMAT_BER}> $<BOOL:${OPENTLV_FORMAT_CER}>
-                $<BOOL:${OPENTLV_FORMAT_DER}> $<BOOL:${OPENTLV_BLUETOOTH}>
-                $<BOOL:${OPENTLV_LLDP}> $<BOOL:${OPENTLV_EMV}> $<BOOL:${OPENTLV_NFC}> $<BOOL:${OPENTLV_DOCUMENT}>)
+                $<BOOL:${OPENTLV_LUA_CORE_FORMAT_BER}> $<BOOL:${OPENTLV_LUA_CORE_FORMAT_CER}>
+                $<BOOL:${OPENTLV_LUA_CORE_FORMAT_DER}> $<BOOL:${OPENTLV_LUA_CORE_BLUETOOTH}>
+                $<BOOL:${OPENTLV_LUA_CORE_LLDP}> $<BOOL:${OPENTLV_LUA_CORE_EMV}> $<BOOL:${OPENTLV_LUA_CORE_NFC}> $<BOOL:${OPENTLV_LUA_CORE_DOCUMENT}>)
         set_tests_properties(Integration_lua_components PROPERTIES
             LABELS "integration;lua"
             ENVIRONMENT "${_lua_test_environment}")
@@ -258,7 +272,7 @@ if(OPENTLV_BUILD_LUA_TESTS)
         set_tests_properties(Integration_example_lua_quick_start PROPERTIES
             LABELS "integration;examples;lua" ENVIRONMENT "${_lua_test_environment}"
             PASS_REGULAR_EXPRESSION "Hello, world!")
-        if(OPENTLV_FORMAT_BER)
+        if(OPENTLV_LUA_CORE_FORMAT_BER)
             foreach(example parse)
                 add_test(NAME Integration_example_lua_${example}
                     COMMAND ${OPENTLV_LUA_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/examples/${example}.lua")
