@@ -47,8 +47,10 @@ additional shared binding helpers required by the standalone build.
 
 The rockspec still contains the original monorepo paths; `luarocks make` from
 this repository awaits [LuaRocks and versioning #4](https://github.com/OpenTLV/opentlv-lua/issues/4).
-Existing CMake tests can run locally; standalone CI and shared Query corpus
-integration remain in [test and CI migration #3](https://github.com/OpenTLV/opentlv-lua/issues/3).
+The standalone [Lua test workflow](.github/workflows/lua.yml) runs the existing
+test suites and shared Query corpus through the public Lua facade. See
+[tests, CI matrix, and baseline comparison](docs/testing.md) for prerequisites,
+ownership, and local execution.
 The preserved [original README](docs/migration/original-readme.md) describes the
 historical Core layout, not the standalone build.
 

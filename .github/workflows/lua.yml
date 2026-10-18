@@ -1,0 +1,159 @@
+name: Lua Bindings
+
+# Preserve the Core Lua workflow matrix and LuaRocks test dependency setup.
+# The standalone module is built with CMake; rockspec adaptation belongs to #4.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ['[0-9]*.[0-9]*.[0-9]*']
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'lua/**'
+      - 'tests/**'
+      - 'examples/**'
+      - 'scripts/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - 'opentlv-scm-1.rockspec'
+      - '.github/workflows/lua.yml'
+
+concurrency:
+  group: lua-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    permissions:
+      contents: read
+    name: build and test / ${{ matrix.os }} / lua ${{ matrix.lua_version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Exercise Windows setup on PRs too; manual and release runs include macOS.
+        os: ${{ fromJSON((startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && '["ubuntu-24.04", "windows-latest", "macos-latest"]' || '["ubuntu-24.04", "windows-latest"]') }}
+        lua_version: ['5.1', '5.3', '5.4']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      # gh-actions-lua builds Lua with cl on Windows, which needs the MSVC
+      # environment.
+      - name: Initialize MSVC environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Set up Lua
+        # v11 links the Windows interpreter to the same DLL as native rocks.
+        uses: leafo/gh-actions-lua@v11
+        with:
+          luaVersion: ${{ matrix.lua_version }}
+          # v10 and v11 share cache keys; avoid restoring a statically linked
+          # Windows interpreter left by the old action.
+          buildCache: ${{ runner.os != 'Windows' }}
+
+      - name: Set up LuaRocks
+        if: runner.os != 'Windows'
+        uses: leafo/gh-actions-luarocks@v4
+
+      # gh-actions-luarocks invokes POSIX configure/make, including on Windows.
+      - name: Set up LuaRocks on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          LUA_VERSION: ${{ matrix.lua_version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $rocksVersion = '3.11.1'
+          $archive = Join-Path $env:RUNNER_TEMP 'luarocks.zip'
+          $toolsDir = Join-Path $env:RUNNER_TEMP 'luarocks'
+          Invoke-WebRequest "https://luarocks.org/releases/luarocks-$rocksVersion-windows-64.zip" -OutFile $archive
+          Expand-Archive -LiteralPath $archive -DestinationPath $toolsDir
+          $rocksBin = Join-Path $toolsDir "luarocks-$rocksVersion-windows-64"
+          $rocks = Join-Path $rocksBin 'luarocks.exe'
+          $luaPrefix = (Join-Path $env:GITHUB_WORKSPACE '.lua').Replace('\', '/')
+          $tree = (Join-Path $env:RUNNER_TEMP 'lua-rocks').Replace('\', '/')
+          $abi = $env:LUA_VERSION.Replace('.', '')
+          $env:LUAROCKS_CONFIG = Join-Path $env:RUNNER_TEMP 'luarocks-config.lua'
+          # Select MSVC explicitly: the standalone executable defaults to MinGW.
+          $config = @"
+          lua_version = "$env:LUA_VERSION"
+          lua_interpreter = "lua.exe"
+          platforms = { "windows", "win32" }
+          rocks_trees = { [[$tree]] }
+          variables = {
+            LUA = [[$luaPrefix/bin/lua.exe]],
+            LUA_DIR = [[$luaPrefix]],
+            LUA_BINDIR = [[$luaPrefix/bin]],
+            LUA_INCDIR = [[$luaPrefix/include]],
+            LUA_LIBDIR = [[$luaPrefix/lib]],
+            LUALIB = "lua$abi.lib",
+          }
+          "@
+          [IO.File]::WriteAllText($env:LUAROCKS_CONFIG, $config, [Text.UTF8Encoding]::new($false))
+          "LUAROCKS_CONFIG=$env:LUAROCKS_CONFIG" >> $env:GITHUB_ENV
+          # Use the same single-configuration output layout as the original workflow.
+          'CMAKE_GENERATOR=Ninja' >> $env:GITHUB_ENV
+          $rocksBin >> $env:GITHUB_PATH
+          "$tree/bin" >> $env:GITHUB_PATH
+          $luaPath = & $rocks path --lr-path
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve LuaRocks Lua path' }
+          $luaCPath = & $rocks path --lr-cpath
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve LuaRocks native module path' }
+          "LUA_PATH=$luaPath;;" >> $env:GITHUB_ENV
+          "LUA_CPATH=$luaCPath;;" >> $env:GITHUB_ENV
+          & $rocks --version
+          if ($LASTEXITCODE -ne 0) { throw 'LuaRocks installation failed' }
+
+      - name: Install test dependencies
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          # Dependency rockspecs can fetch archives outside the LuaRocks server.
+          # Retry transient download failures while retaining a failing final status.
+          for attempt in 1 2 3; do
+            if luarocks install busted; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::Test dependency installation failed (attempt $attempt/3); retrying in 5 seconds."
+              sleep 5
+            fi
+          done
+          echo "::error::Test dependency installation failed after 3 attempts."
+          exit 1
+
+      # Git Bash prepends its Unix tools to PATH and shadows MSVC's link.exe.
+      - name: Install test dependencies on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            luarocks install busted
+            if ($LASTEXITCODE -eq 0) { exit 0 }
+            if ($attempt -lt 3) {
+              Write-Output "::warning::Test dependency installation failed (attempt $attempt/3); retrying in 5 seconds."
+              Start-Sleep -Seconds 5
+            }
+          }
+          Write-Output '::error::Test dependency installation failed after 3 attempts.'
+          exit 1
+
+      - name: Build and run existing Lua tests and Query corpus
+        if: runner.os != 'Windows'
+        shell: bash
+        run: python -B scripts/ci.py --lua-prefix .lua --build-dir build/ci
+
+      # Keep MSVC's link.exe ahead of the Git Bash Unix tool of the same name.
+      - name: Build and run existing Lua tests and Query corpus on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: python -B scripts/ci.py --lua-prefix .lua --build-dir build/ci
