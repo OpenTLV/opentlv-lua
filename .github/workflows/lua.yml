@@ -20,7 +20,7 @@ on:
         type: string
   push:
     branches: [main]
-    tags: ['[0-9]*.[0-9]*.[0-9]*']
+    tags: ['v[0-9]*.[0-9]*.[0-9]*']
   pull_request:
     branches: [main]
     paths:
@@ -192,7 +192,7 @@ jobs:
         run: python -B scripts/ci.py --lua-prefix .lua --build-dir build/ci
 
       - name: Check Lua version metadata
-        run: python -B tests/test_version.py
+        run: python -B -m unittest discover -s tests -p "test_*.py"
 
       - name: Build and check the installed LuaRocks package
         if: runner.os != 'Windows'

@@ -1,7 +1,7 @@
 # Lua release quality gates
 
-Lua releases use independent numeric `MAJOR.MINOR.PATCH` tags, starting with
-`0.1.0`. The manual workflow in [release.yml](../.github/workflows/release.yml)
+Lua releases use independent `vMAJOR.MINOR.PATCH` tags, starting with
+`v0.1.0`. The manual workflow in [release.yml](../.github/workflows/release.yml)
 creates a tag only after the exact candidate passes the full Lua test matrix
 and the final job verifies the results. It runs only when manually dispatched.
 
@@ -16,16 +16,21 @@ workflow**, and select branch **main**. Provide:
 | `version` | Numeric version without a `v` prefix or leading zeros, initially `0.1.0` |
 | `commit` | Full 40-character lowercase Lua commit SHA to test and tag |
 
+The workflow converts the numeric `version` input into a validated `v`-prefixed
+Git tag: input `0.1.0` creates `v0.1.0`.
+
 The candidate must belong to `main` and be the dispatched workflow revision or
 one of its ancestors. Use the complete immutable commit SHA, not a branch,
 abbreviated SHA, or tag. The version tag must not already exist, and the
-candidate must not already carry another numeric release tag. The workflow
-verifies the canonical Core source URL and the single immutable SHA pinned in
+candidate must not already carry another `vMAJOR.MINOR.PATCH` release tag. The
+workflow verifies the canonical Core source URL and the single immutable SHA pinned in
 the candidate's `cmake/Core.cmake`; Core's release version does not determine
 the Lua version.
 
-The first hosted quality-gate test is intended to create the real `0.1.0` tag.
+The first hosted quality-gate test is intended to create the real `v0.1.0` tag.
 Running local validation or merging this workflow does not create that tag.
+Before that first run, merge and validate the `v`-prefix correction, dispatch
+from the updated `main`, and select a candidate that includes the correction.
 
 ## What the gate runs
 
@@ -60,7 +65,7 @@ Counts come from completed test output, so a successful job alone is not a
 substitute for test evidence. Inspect the summary and individual job logs when
 reviewing a gate.
 
-After verification, the final job creates `refs/tags/<version>` at the tested
+After verification, the final job creates `refs/tags/v<version>` at the tested
 Lua commit. It rechecks that the tag does not exist and creates the reference
 without replacing an existing one; a concurrent attempt that creates the same
 tag causes creation to fail. Existing tags are never moved.

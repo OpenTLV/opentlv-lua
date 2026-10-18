@@ -1,8 +1,8 @@
 # Lua binding versioning
 
-Lua releases belong to `OpenTLV/opentlv-lua` and use numeric `MAJOR.MINOR.PATCH`
-Git tags, for example `0.1.0`. They do not track the version of OpenTLV Core.
-The existing Lua workflow already selects its full OS matrix for numeric tags.
+Lua releases belong to `OpenTLV/opentlv-lua` and use `vMAJOR.MINOR.PATCH`
+Git tags, for example `v0.1.0`. They do not track the version of OpenTLV Core.
+The Lua workflow selects its full OS matrix for `v`-prefixed version tags.
 The package remains named `opentlv`; `scm-1` remains its development rockspec.
 
 ## Version metadata
@@ -14,16 +14,19 @@ its versioned LuaRocks directory, normally
 
 | Field | Meaning |
 | --- | --- |
-| `binding_version` | Exact clean Lua release tag, or an explicitly identified development build |
+| `binding_version` | Clean Lua semantic version without the `v` prefix, or an explicitly identified development build |
 | `binding_revision` | Full Lua repository commit SHA, empty when Git identity is unavailable |
-| `release_tag` | Numeric Lua tag pointing at HEAD, otherwise empty |
+| `release_tag` | Full `vMAJOR.MINOR.PATCH` Lua tag pointing at HEAD, otherwise empty |
 | `dirty` | Whether Git reports tracked modifications or untracked files; ignored build files do not count |
 
-A clean checkout tagged `0.1.0` reports `0.1.0`. An untagged commit reports
+A clean checkout tagged `v0.1.0` reports `binding_version` as `0.1.0` and
+`release_tag` as `v0.1.0`. An untagged commit reports
 `scm+g<12-digit-sha>`. A modified checkout adds `.dirty`; at a release tag it
 reports `0.1.0+g<12-digit-sha>.dirty`. A later untagged commit returns to `scm`
-rather than presenting itself as the preceding release. Multiple numeric
-release tags on one commit are rejected. Other tags are not release versions.
+rather than presenting itself as the preceding release. The full `release_tag`
+is retained on a dirty tagged checkout. Multiple `vMAJOR.MINOR.PATCH` release
+tags on one commit are rejected. Other tags, including unprefixed numeric tags,
+are not release versions.
 
 The source directory must be the Git repository root. Core's tags and tags in
 an enclosing workspace never supply Lua metadata. A source archive without
@@ -40,10 +43,10 @@ Core library. The Core dependency SHA is recorded separately in
 
 ## First standalone release baseline
 
-Lua binding versioning starts with the first release tag, **0.1.0**. Until that
+Lua binding versioning starts with the first release tag, **v0.1.0**. Until that
 tag is added, the binding remains an unversioned development build (`scm`),
 packaged by `opentlv-scm-1.rockspec`. No provisional numeric release version is
-assigned. The first `0.1.0` tag will be created as part of quality-gate validation;
+assigned. The first `v0.1.0` tag will be created as part of quality-gate validation;
 the [manual release workflow](releases.md) creates it only after the complete
 gate succeeds. Implementing the workflow does not itself create a tag or
 publish a package. Its source,
@@ -61,14 +64,14 @@ untagged candidate, so its metadata still identifies a development build until
 the final job creates the tag. A clean checkout of the resulting tag reports
 the release version.
 
-LuaRocks publication is a separate follow-up. Once the `0.1.0` tag exists, a
+LuaRocks publication is a separate follow-up. Once the `v0.1.0` tag exists, a
 versioned copy of the existing rockspec uses:
 
 ```lua
 version = "0.1.0-1"
 source = {
    url = "git+https://github.com/OpenTLV/opentlv-lua.git",
-   tag = "0.1.0"
+   tag = "v0.1.0"
 }
 ```
 
