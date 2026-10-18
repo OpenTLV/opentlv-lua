@@ -82,10 +82,15 @@ def checkout_sha(source, expected=None, canonical_core=False):
 def ctest_evidence(output, evidence):
     # Busted may color its summary when the runner is configured for ANSI output.
     plain = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", output)
-    summaries = re.findall(r"(\d+)% tests passed, (\d+) tests failed out of (\d+)", plain)
+    summaries = re.findall(
+        r"^(\d+)% tests passed(?:, (\d+) tests failed)? out of (\d+)\s*$",
+        plain, re.MULTILINE)
     if len(summaries) == 1:
-        _, failed, total = map(int, summaries[0])
-        evidence.update(ctest_passed=total - failed, ctest_total=total)
+        percentage, failed, total = summaries[0]
+        # Newer CTest omits the zero-failure clause for a fully passing suite.
+        if percentage == "100" or (failed and int(failed) > 0):
+            failed, total = int(failed or 0), int(total)
+            evidence.update(ctest_passed=total - failed, ctest_total=total)
     busted = re.findall(
         r"^\s*(?:\d+:\s*)?(\d+) success(?:es)? / (\d+) failures? / (\d+) errors? / (\d+) pending\b",
         plain, re.MULTILINE)
