@@ -32,7 +32,7 @@ fixture conversion, and assertions are preserved.
 | Events | Operating systems | Lua versions | Jobs |
 | --- | --- | --- | ---: |
 | Main branch pushes and relevant pull requests | Ubuntu 24.04, Windows latest | 5.1, 5.3, 5.4 | 6 |
-| Manual dispatch, numeric version tags, and release workflow calls | Ubuntu 24.04, Windows latest, macOS latest | 5.1, 5.3, 5.4 | 9 |
+| Manual dispatch, `v`-prefixed version tags, and release workflow calls | Ubuntu 24.04, Windows latest, macOS latest | 5.1, 5.3, 5.4 | 9 |
 
 Lua 5.2 and LuaJIT remain supported runtimes but were not in the original CI
 matrix; this migration does not add matrix entries. The existing Lua action,
@@ -71,10 +71,18 @@ existing examples. The additional Query corpus execution retains the original
 optimized/unoptimized, retained/streaming, input-window and Document checks.
 The migrated suite's assertions and expected results remain unchanged.
 
-After the existing suites, CI runs `python -B tests/test_version.py` against
-disposable Git repositories. These checks cover clean release tags, development
+After the existing suites, CI runs both Python regression suites with
+`python -B -m unittest discover -s tests -p "test_*.py"`.
+`tests/test_version.py` uses disposable Git repositories to check clean release tags, development
 commits, tracked/untracked changes, ambiguous tags, and source archives both
 inside and outside an enclosing repository.
+
+`tests/test_release.py` uses local GitHub API fixtures
+to check release input and tag validation, exact commit identities, full matrix
+evidence, and rejection paths before tag creation. These tests do not contact
+GitHub or create release tags in this repository. Run the combined command
+locally, or select `python -B tests/test_version.py` or
+`python -B tests/test_release.py`, without building the Lua module.
 
 CI then invokes:
 
@@ -212,7 +220,7 @@ These are local results. Hosted CI, macOS, Linux Lua 5.1/5.3, Lua 5.2, and
 LuaJIT were not run for the packaging validation above. The version tests
 create tags only in disposable fixtures. The added manual release workflow
 still requires a hosted quality-gate run; its first successful test will create
-the real `0.1.0` tag. No hosted gate or real tag creation is claimed by these
+the real `v0.1.0` tag. No hosted gate or real tag creation is claimed by these
 local results.
 
 ## Local release-gate validation (#4)

@@ -17,6 +17,7 @@ from urllib.request import Request, urlopen
 REPOSITORY = "OpenTLV/opentlv-lua"
 CORE_REPOSITORY = "OpenTLV/opentlv"
 VERSION = r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
+TAG = "v" + VERSION
 SHA = r"[0-9a-f]{40}"
 SYSTEMS = ("ubuntu-24.04", "windows-latest", "macos-latest")
 LUA_VERSIONS = ("5.1", "5.3", "5.4")
@@ -65,7 +66,9 @@ def core_pin(text):
 
 
 def request_identity(version, sha):
-    require(re.fullmatch(VERSION, version), "Version/tag must be MAJOR.MINOR.PATCH, without v or leading zeros")
+    require(re.fullmatch(VERSION, version), "Version must be MAJOR.MINOR.PATCH, without v or leading zeros")
+    tag = "v" + version
+    require(re.fullmatch(TAG, tag), "Release tag must be vMAJOR.MINOR.PATCH")
     require(re.fullmatch(SHA, sha), "Lua commit must be a full lowercase 40-character SHA")
     require(os.environ.get("GITHUB_REPOSITORY") == REPOSITORY, "Unexpected release repository")
     require(os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch", "Release requires manual dispatch")
@@ -80,7 +83,7 @@ def request_identity(version, sha):
             "Unexpected Lua checkout origin")
     require(git("rev-parse", sha + "^{commit}") == sha, "Requested object is not the exact Lua commit")
     subprocess.run(["git", "merge-base", "--is-ancestor", sha, workflow_sha], check=True)
-    identity = {"version": version, "tag": version, "lua_sha": sha, "workflow_sha": workflow_sha,
+    identity = {"version": version, "tag": tag, "lua_sha": sha, "workflow_sha": workflow_sha,
                 "core_sha": core_pin(git("show", sha + ":cmake/Core.cmake")),
                 "run_id": os.environ.get("GITHUB_RUN_ID", ""),
                 "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT", "")}
@@ -101,7 +104,7 @@ def verify_remote(identity):
     # Listing refs includes annotated tags; peel them before comparing commits.
     refs = api(REPOSITORY + "/git/matching-refs/tags/", missing=[])
     for ref in refs:
-        if not re.fullmatch("refs/tags/" + VERSION, ref["ref"]):
+        if not re.fullmatch("refs/tags/" + TAG, ref["ref"]):
             continue
         obj = ref["object"]
         for _ in range(10):
@@ -227,7 +230,7 @@ def main():
     if args.command == "verify":
         verify_checkout(args.sha, args.core_sha, args.core_path)
         return
-    identity = {"version": args.version, "tag": args.version, "lua_sha": args.sha}
+    identity = {"version": args.version, "lua_sha": args.sha}
     rows, status, failure = [], "failed; no tag created", ""
     try:
         identity = request_identity(args.version, args.sha)

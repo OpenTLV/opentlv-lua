@@ -59,8 +59,9 @@ continue to report Core. See [versioning](docs/versioning.md).
 
 The manual [release quality gate](docs/releases.md) tests an exact Lua commit
 against the pinned Core across all nine OS/Lua combinations before creating
-its numeric Git tag. The first release version is `0.1.0`; the workflow creates
-only the tag, with results recorded in the Actions summary.
+its `v`-prefixed Git tag. The first release version is `0.1.0`, producing tag
+`v0.1.0`; the workflow creates only the tag, with results recorded in the
+Actions summary.
 
 ## Migration status
 

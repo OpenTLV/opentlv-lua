@@ -144,15 +144,15 @@ same native `opentlv._core` and pure-Lua `opentlv` entry points. Its source URL
 is `https://github.com/OpenTLV/opentlv-lua.git`. The original inventory remains
 the record of the initial import, including the original rockspec's checksum.
 
-Lua versions derive only from this repository's numeric release tags. Versioning
-starts when the first tag `0.1.0` is added during quality-gate validation; until
+Lua versions derive only from this repository's `v`-prefixed release tags. Versioning
+starts when the first tag `v0.1.0` is added during quality-gate validation; until
 then the binding remains `scm`.
 The first standalone release baseline uses the source and dependency
 revision `d87dcf96b2707e817dd51163a9f9efa36651e929` recorded above. The
 [manual release quality gate](releases.md) reuses all nine Lua matrix jobs
 against an exact Lua candidate and verifies the pinned Core before creating
 only its Git tag. Implementing this workflow creates no real tag; the first
-`0.1.0` tag is reserved for the hosted quality-gate test. See [versioning](versioning.md) for
+`v0.1.0` tag is reserved for the hosted quality-gate test. See [versioning](versioning.md) for
 build metadata, development/archive behavior, and the distinction between Lua
 release versions, LuaRocks packaging revisions, and the existing Core version
 reported by the Lua API.
