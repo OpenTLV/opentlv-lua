@@ -1,0 +1,39 @@
+# Preserve the original Core Lua binding formatting convention.
+BasedOnStyle: LLVM
+Standard: c++17
+
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 100
+AccessModifierOffset: -4
+ConstructorInitializerIndentWidth: 4
+
+BreakBeforeBraces: Attach
+PointerAlignment: Left
+ReferenceAlignment: Left
+DerivePointerAlignment: false
+AlignConsecutiveDeclarations: true
+NamespaceIndentation: None
+
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: true
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortEnumsOnASingleLine: true
+
+SpaceBeforeParens: ControlStatements
+SpacesBeforeTrailingComments: 1
+IndentCaseLabels: true
+
+# Header order in this codebase is deliberate (nearest-to-furthest, not
+# alphabetical); do not let the formatter re-sort or regroup it.
+SortIncludes: false
+IncludeBlocks: Preserve
+
+# TLV_API is a visibility/export specifier and TLV_NODISCARD expands to
+# [[nodiscard]]; both precede a declaration's return type like an attribute.
+AttributeMacros:
+  - TLV_API
+  - TLV_NODISCARD

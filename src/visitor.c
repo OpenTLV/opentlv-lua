@@ -150,6 +150,8 @@ static int visit(lua_State* L, int tree) {
         code = tlv_reader_init(&reader, (const uint8_t*)data, data_len, &format->format);
         if (code == TLV_OK)
             code = tlv_reader_visit_diag(&reader, sequential_trampoline, &ctx, &diagnostic);
+        /* The synchronous visitor has finished; end the stack reader borrow. */
+        ctx.reader = NULL;
     }
 #if OPENTLV_FORMAT_DER
     else if (format->use_der_validation) {

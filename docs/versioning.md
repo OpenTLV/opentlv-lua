@@ -2,7 +2,7 @@
 
 Lua releases belong to `OpenTLV/opentlv-lua` and use `vMAJOR.MINOR.PATCH`
 Git tags, for example `v0.1.0`. They do not track the version of OpenTLV Core.
-The Lua workflow selects its full OS matrix for `v`-prefixed version tags.
+The release gate runs Full CI before creating a new remote version tag.
 The package remains named `opentlv`; `scm-1` remains its development rockspec.
 
 ## Version metadata
@@ -46,23 +46,20 @@ Core library. The Core dependency SHA is recorded separately in
 Lua binding versioning starts with the first release tag, **v0.1.0**. Until that
 tag is added, the binding remains an unversioned development build (`scm`),
 packaged by `opentlv-scm-1.rockspec`. No provisional numeric release version is
-assigned. The first `v0.1.0` tag will be created as part of quality-gate validation;
-the [manual release workflow](releases.md) creates it only after the complete
-gate succeeds. Implementing the workflow does not itself create a tag or
-publish a package. Its source,
+assigned. The original tag-only quality gate established this initial baseline.
+The current [manual release workflow](releases.md) verifies and publishes later
+candidates only after Full CI succeeds. The migration's source,
 CMake, test, and LuaRocks migration baseline is Core commit
 `d87dcf96b2707e817dd51163a9f9efa36651e929`, which is also the pinned Core
 dependency. [Migration provenance](migration.md) records the source repository,
 destination, inventory, and validation boundaries. The existing API and Lua
-5.1–5.4/LuaJIT compatibility are retained.
+5.1â€“5.4/LuaJIT compatibility are retained.
 
-For a release, select a Lua version independently of Core, update the standalone
-changelog, and merge the candidate into `main`. Dispatch the manual release
-workflow from `main` with the numeric version and exact Lua commit SHA, as
-described in [release instructions](releases.md). The quality gate tests that
-untagged candidate, so its metadata still identifies a development build until
-the final job creates the tag. A clean checkout of the resulting tag reports
-the release version.
+For a release, choose the Lua version independently of Core, close the standalone
+changelog and merge to `main`. Dispatch the manual gate with its only input
+`tag`, for example `v0.2.0`. It locks the dispatch SHA and runs Full CI with a
+private local candidate tag, so validated artifacts contain release metadata
+before the publisher creates the remote tag. See [release instructions](releases.md).
 
 LuaRocks publication is a separate follow-up. Once the `v0.1.0` tag exists, a
 versioned copy of the existing rockspec uses:
@@ -78,6 +75,5 @@ source = {
 Its filename is `opentlv-0.1.0-1.rockspec`. The final `-1` is the LuaRocks
 packaging revision, not part of the Git tag or Core version. Keep the existing
 build/install commands; the development rockspec stays `scm-1`. Validate the
-release checkout and installed modules before publication. The quality gate
-creates only a Git tag: it does not create a versioned release rockspec, GitHub
-Release, release artifact, or LuaRocks publication.
+release checkout and installed modules before publication. The quality gate publishes validated module archives and a GitHub Release. It
+does not create a versioned release rockspec or publish to LuaRocks.

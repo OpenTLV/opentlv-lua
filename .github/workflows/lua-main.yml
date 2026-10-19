@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Marek Cingel
+name: Lua Main CI
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  attestations: read
+concurrency:
+  group: lua-main-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - run: sudo apt-get update && sudo apt-get install -y lua5.4 liblua5.4-dev ninja-build
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python -B scripts/ci.py --lua-prefix /usr --lua-executable /usr/bin/lua5.4
+          --lua-include /usr/include/lua5.4 --runtime 5.4 --smoke --output build/record.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lua-main-smoke-${{ github.run_attempt }}
+          path: build/record.json
+          if-no-files-found: error
+  gate:
+    name: Lua quality gate
+    if: always()
+    needs: [smoke]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: lua-main-smoke-${{ github.run_attempt }}
+          path: build/evidence
+      - env:
+          CHECK_RESULTS: ${{ toJSON(needs) }}
+        run: python -B scripts/release.py gate --tier main --output build/quality.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lua-quality-main-${{ github.run_attempt }}
+          path: build/quality.json
+          if-no-files-found: error
+
+  timings:
+    name: Lua main timings
+    if: always()
+    needs: [gate]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: python -B scripts/ci_timings.py --scope run --output build/timings.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lua-main-timings-${{ github.run_attempt }}
+          path: build/timings.json
+          if-no-files-found: error

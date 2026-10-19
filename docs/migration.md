@@ -51,7 +51,7 @@ its recorded hashes.
   `luaopen_opentlv__core` retain their existing names and implementation.
 - Module registration, public Lua APIs, userdata ownership, garbage collection,
   error handling, and diagnostic mappings are unchanged.
-- Lua 5.1–5.4 and LuaJIT compatibility helpers are unchanged.
+- Lua 5.1â€“5.4 and LuaJIT compatibility helpers are unchanged.
 - Optional Core component integration and platform-specific linking logic are
   retained in their original sources and build metadata.
 - `version()` and `_VERSION` continue to report the linked Core version.
@@ -148,14 +148,11 @@ Lua versions derive only from this repository's `v`-prefixed release tags. Versi
 starts when the first tag `v0.1.0` is added during quality-gate validation; until
 then the binding remains `scm`.
 The first standalone release baseline uses the source and dependency
-revision `d87dcf96b2707e817dd51163a9f9efa36651e929` recorded above. The
-[manual release quality gate](releases.md) reuses all nine Lua matrix jobs
-against an exact Lua candidate and verifies the pinned Core before creating
-only its Git tag. Implementing this workflow creates no real tag; the first
-`v0.1.0` tag is reserved for the hosted quality-gate test. See [versioning](versioning.md) for
-build metadata, development/archive behavior, and the distinction between Lua
-release versions, LuaRocks packaging revisions, and the existing Core version
-reported by the Lua API.
+revision `d87dcf96b2707e817dd51163a9f9efa36651e929` recorded above. The original tag-only gate used nine configurations; its implementation
+created no tag by itself. The current [release quality gate](releases.md)
+supersedes that workflow with PR/Main/Full/Release separation and verified
+module artifacts. See [versioning](versioning.md) for the distinction between
+Lua versions, LuaRocks revisions and the Core version reported by the API.
 
 ## Documentation ownership follow-up (opentlv-docs#27)
 

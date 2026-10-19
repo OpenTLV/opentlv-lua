@@ -25,7 +25,24 @@ FetchContent_Declare(opentlv_core
     GIT_TAG d87dcf96b2707e817dd51163a9f9efa36651e929
     FIND_PACKAGE_ARGS CONFIG NAMES OpenTLV
 )
-FetchContent_MakeAvailable(opentlv_core)
+set(OPENTLV_LUA_CORE_PACKAGE "" CACHE PATH "Explicit Core package directory (no source fallback)")
+if(OPENTLV_LUA_CORE_PACKAGE)
+    if(FETCHCONTENT_SOURCE_DIR_OPENTLV_CORE)
+        message(FATAL_ERROR "An explicit Core package cannot be combined with a source override")
+    endif()
+    if(NOT EXISTS "${OPENTLV_LUA_CORE_PACKAGE}/OpenTLVConfig.cmake")
+        message(FATAL_ERROR "Explicit Core package must contain OpenTLVConfig.cmake")
+    endif()
+    set(OpenTLV_DIR "${OPENTLV_LUA_CORE_PACKAGE}" CACHE PATH "Selected Core" FORCE)
+    find_package(OpenTLV CONFIG REQUIRED PATHS "${OPENTLV_LUA_CORE_PACKAGE}" NO_DEFAULT_PATH)
+    file(REAL_PATH "${OpenTLV_DIR}" _selected_package)
+    file(REAL_PATH "${OPENTLV_LUA_CORE_PACKAGE}" _requested_package)
+    if(NOT _selected_package STREQUAL _requested_package)
+        message(FATAL_ERROR "Explicit Core package was shadowed")
+    endif()
+else()
+    FetchContent_MakeAvailable(opentlv_core)
+endif()
 if(NOT TARGET OpenTLV::tlv)
     message(FATAL_ERROR
         "Selected Core does not provide OpenTLV::tlv. Use Core with the public "

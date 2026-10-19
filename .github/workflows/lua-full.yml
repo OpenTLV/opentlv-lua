@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Marek Cingel
+name: Lua Full CI
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      release_tag:
+        type: string
+        default: ''
+permissions:
+  contents: read
+  attestations: read
+  actions: read
+  security-events: write
+concurrency:
+  group: lua-full-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  checks:
+    uses: ./.github/workflows/lua-checks.yml
+    with:
+      tier: full
+      release_tag: ${{ inputs.release_tag || '' }}
+
+  timings:
+    name: Lua full timings
+    if: always()
+    needs: [checks]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: python -B scripts/ci_timings.py --scope lua --output build/timings.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lua-full-timings-${{ github.run_attempt }}
+          path: build/timings.json
+          if-no-files-found: error

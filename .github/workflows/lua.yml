@@ -1,86 +1,65 @@
-name: Lua Bindings
-
-# Preserve the Core Lua workflow matrix and LuaRocks test dependency setup.
-# Test the CMake build and the installed LuaRocks package independently.
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Marek Cingel
+name: Lua build matrix
 on:
-  workflow_dispatch:
   workflow_call:
     inputs:
-      revision:
-        description: Exact Lua commit selected by the release gate
-        required: true
+      tier:
         type: string
-      core_revision:
-        description: Immutable Core commit from the release request
         required: true
+      release_tag:
         type: string
-      release_version:
-        description: Requested numeric Lua release version
-        required: true
-        type: string
-  push:
-    branches: [main]
-    tags: ['v[0-9]*.[0-9]*.[0-9]*']
-  pull_request:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'lua/**'
-      - 'tests/**'
-      - 'examples/**'
-      - 'scripts/**'
-      - 'cmake/**'
-      - 'CMakeLists.txt'
-      - '.gitignore'
-      - 'opentlv-scm-1.rockspec'
-      - '.github/workflows/lua.yml'
-      - '.github/workflows/release.yml'
-
-concurrency:
-  group: lua-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
+        default: ''
 permissions:
   contents: read
-
+  attestations: read
 jobs:
+  inventory:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - id: matrix
+        env:
+          TIER: ${{ inputs.tier }}
+        run: python -B scripts/release.py matrix --tier "$TIER"
   test:
-    permissions:
-      contents: read
-    name: build and test / ${{ matrix.os }} / lua ${{ matrix.lua_version }}
+    needs: inventory
+    name: ${{ matrix.id }}
     strategy:
       fail-fast: false
-      matrix:
-        # Exercise Windows setup on PRs too; manual and release runs include macOS.
-        os: ${{ fromJSON((inputs.revision != '' || startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && '["ubuntu-24.04", "windows-latest", "macos-latest"]' || '["ubuntu-24.04", "windows-latest"]') }}
-        lua_version: ['5.1', '5.3', '5.4']
+      matrix: ${{ fromJSON(needs.inventory.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     env:
-      RELEASE_LUA_SHA: ${{ inputs.revision }}
-      RELEASE_CORE_SHA: ${{ inputs.core_revision }}
-      RELEASE_VERSION: ${{ inputs.release_version }}
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      LUA_JOB_ID: ${{ matrix.id }}
+      CMAKE_GENERATOR: Ninja
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.revision || github.sha }}
           fetch-depth: 0
           persist-credentials: false
-
-      - name: Verify release checkout
-        if: inputs.revision != ''
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Linux compiler tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y clang-18 ninja-build
+      - name: Select sanitizer compiler
+        if: matrix.sanitizer
+        run: echo 'CC=clang-18' >> "$GITHUB_ENV"
+      - name: Set local candidate version
+        if: inputs.release_tag != ''
         shell: python
         run: |
-          import os
-          from pathlib import Path
-          import subprocess
-          import sys
-          # Load the verifier from the trusted caller revision, not candidate code.
-          verifier = Path(os.environ['RUNNER_TEMP']) / 'lua-release.py'
-          verifier.write_bytes(subprocess.check_output([
-              'git', 'show', os.environ['GITHUB_SHA'] + ':scripts/release.py']))
-          subprocess.run([sys.executable, '-B', str(verifier), 'verify'], check=True)
-
+          import os, re, subprocess
+          tag = os.environ['RELEASE_TAG']
+          assert re.fullmatch(r'v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)', tag)
+          subprocess.run(['git', 'tag', tag, os.environ['GITHUB_SHA']], check=True)
       # gh-actions-lua builds Lua with cl on Windows, which needs the MSVC
       # environment.
       - name: Initialize MSVC environment
@@ -93,7 +72,7 @@ jobs:
         # v11 links the Windows interpreter to the same DLL as native rocks.
         uses: leafo/gh-actions-lua@v11
         with:
-          luaVersion: ${{ matrix.lua_version }}
+          luaVersion: ${{ matrix.lua == 'luajit' && 'luajit-2.1' || matrix.lua }}
           # v10 and v11 share cache keys; avoid restoring a statically linked
           # Windows interpreter left by the old action.
           buildCache: ${{ runner.os != 'Windows' }}
@@ -107,7 +86,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         env:
-          LUA_VERSION: ${{ matrix.lua_version }}
+          LUA_VERSION: ${{ matrix.lua }}
         run: |
           $ErrorActionPreference = 'Stop'
           $rocksVersion = '3.11.1'
@@ -185,35 +164,30 @@ jobs:
           Write-Output '::error::Test dependency installation failed after 3 attempts.'
           exit 1
 
-      - name: Build and run existing Lua tests and Query corpus
-        id: suite
-        # Runner defaults preserve pwsh on Windows and bash on Linux/macOS.
-        # In particular, Git Bash must not shadow MSVC's link.exe on Windows.
-        run: python -B scripts/ci.py --lua-prefix .lua --build-dir build/ci
-
-      - name: Check Lua version metadata
-        run: python -B -m unittest discover -s tests -p "test_*.py"
-
-      - name: Build and check the installed LuaRocks package
-        if: runner.os != 'Windows'
-        shell: bash
-        run: python -B scripts/check_luarocks.py --lua .lua/bin/lua --core-source build/ci/_deps/opentlv_core-src
-
-      - name: Build and check the installed LuaRocks package on Windows
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: python -B scripts/check_luarocks.py --lua .lua/bin/lua.exe --core-source build/ci/_deps/opentlv_core-src
-
-      # Successful step names are available through the attempt-specific Jobs API;
-      # the release report can collect actual counts without uploading artifacts.
-      - name: "Gate evidence | Lua=${{ steps.suite.outputs.lua_sha }} | Core=${{ steps.suite.outputs.core_sha }} | CTest=${{ steps.suite.outputs.ctest_passed }}/${{ steps.suite.outputs.ctest_total }} | Busted=${{ steps.suite.outputs.busted_passed }} | Query=${{ steps.suite.outputs.query_fixtures }}/${{ steps.suite.outputs.query_checks }}"
-        if: inputs.revision != ''
+      - name: Lua build, public API, corpus and packaging
+        env:
+          LUA_RUNTIME: ${{ matrix.lua }}
+          CORE_SHARED: ${{ matrix.shared }}
+          CONFIGURATION: ${{ matrix.configuration }}
+          SANITIZER: ${{ matrix.sanitizer }}
+          ROCKS: ${{ matrix.rocks }}
+          PACKAGE: ${{ matrix.package }}
         shell: python
         run: |
-          import os
-          from pathlib import Path
-          import subprocess
-          import sys
-          verifier = Path(os.environ['RUNNER_TEMP']) / 'lua-release.py'
-          subprocess.run([sys.executable, '-B', str(verifier), 'verify',
-                          '--core-path', 'build/ci/_deps/opentlv_core-src'], check=True)
+          import os, subprocess, sys
+          args = [sys.executable, '-B', 'scripts/ci.py', '--lua-prefix', '.lua',
+                  '--runtime', os.environ['LUA_RUNTIME'], '--shared', os.environ['CORE_SHARED'],
+                  '--configuration', os.environ['CONFIGURATION'], '--output', 'build/record.json']
+          for key, flag in [('SANITIZER', '--sanitizer'), ('ROCKS', '--rocks')]:
+              if os.environ[key] == 'true': args.append(flag)
+          if os.environ['PACKAGE']: args.extend(['--package', os.environ['PACKAGE']])
+          if os.environ['RELEASE_TAG']: args.append('--release')
+          subprocess.run(args, check=True)
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lua-build-${{ matrix.id }}-${{ github.run_attempt }}
+          path: |
+            build/record.json
+            build/packages/*.zip
+          if-no-files-found: error

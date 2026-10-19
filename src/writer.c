@@ -172,12 +172,12 @@ static int writer_write(lua_State* L) {
 }
 
 static int writer_element(lua_State* L) {
-    lua_writer_t* self = check_writer(L);
+    check_writer(L);
     luaL_checktype(L, 2, LUA_TTABLE);
     lua_getfield(L, 2, "tag");
     lua_getfield(L, 2, "value");
     /* __index may execute Lua, including an explicit finalizer call. */
-    self = check_writer(L);
+    lua_writer_t* self = check_writer(L);
     return write_impl(L, self, lua_gettop(L) - 1, lua_gettop(L));
 }
 

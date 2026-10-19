@@ -38,7 +38,7 @@ def main():
         include = run([rocks, "config", "variables.LUA_INCDIR"],
                       stdout=subprocess.PIPE, text=True).stdout.strip()
         run(["cmake", "--fresh", "-S", ROOT, "-B", ROOT / "build/luarocks",
-             "-DCMAKE_BUILD_TYPE=Release", "-DOPENTLV_BUILD_LUA_TESTS=OFF",
+             "-DCMAKE_BUILD_TYPE=Release", "-DOPENTLV_BUILD_LUA_TESTS=OFF", "-DOPENTLV_BUILD_SHARED_LIBS=OFF",
              "-DLUA_INCLUDE_DIR=" + include,
              "-DFETCHCONTENT_SOURCE_DIR_OPENTLV_CORE=" + str(args.core_source.resolve())],
             cwd=ROOT)

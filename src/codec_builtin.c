@@ -984,8 +984,8 @@ static int                           emv_find(lua_State* L) {
     const char*       bytes = opentlv_lua_codec_string(L, 1, &size);
     tlv_emv_context_t context =
         lua_isnoneornil(L, 2)
-            ? TLV_EMV_CONTEXT_BASE
-            : (tlv_emv_context_t)opentlv_lua_codec_uint(L, 2, TLV_EMV_CONTEXT_COUNT - 1);
+                                      ? TLV_EMV_CONTEXT_BASE
+                                      : (tlv_emv_context_t)opentlv_lua_codec_uint(L, 2, TLV_EMV_CONTEXT_COUNT - 1);
     tlv_tag_t                   tag = {(const uint8_t*)bytes, size};
     const tlv_emv_definition_t* definition = tlv_emv_find(context, &tag);
     if (!definition || !definition->codec) {

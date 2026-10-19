@@ -1,79 +1,121 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Marek Cingel
-name: Lua release gate
-
+name: Lua Release Gate
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: New Lua version, e.g. 0.1.0 (creates tag v0.1.0)
+      tag:
+        description: New release tag, e.g. v0.2.0; changelog must be closed
         required: true
         type: string
-      commit:
-        description: Exact 40-character Lua commit SHA already on main
-        required: true
-        type: string
-
 permissions:
   contents: read
-
+  attestations: read
 concurrency:
   group: lua-release
   cancel-in-progress: false
-
 jobs:
   prepare:
-    name: Validate release request
     runs-on: ubuntu-24.04
-    outputs:
-      sha: ${{ steps.request.outputs.lua_sha }}
-      core_sha: ${{ steps.request.outputs.core_sha }}
-      version: ${{ steps.request.outputs.version }}
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Verify repository, main ancestry, new tag and Core pin
-        id: request
-        env:
+      - env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_VERSION: ${{ inputs.version }}
-          RELEASE_LUA_SHA: ${{ inputs.commit }}
-        run: python -B scripts/release.py prepare
-
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: python -B scripts/release.py prepare --output build/request.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lua-request-${{ github.run_attempt }}
+          path: build/request.json
+          if-no-files-found: error
   full-ci:
-    name: Full Lua CI
     needs: prepare
-    uses: ./.github/workflows/lua.yml
+    permissions:
+      contents: read
+      attestations: read
+      actions: read
+      security-events: write
+    uses: ./.github/workflows/lua-full.yml
     with:
-      revision: ${{ needs.prepare.outputs.sha }}
-      core_revision: ${{ needs.prepare.outputs.core_sha }}
-      release_version: ${{ needs.prepare.outputs.version }}
-
-  tag:
-    name: Report release gate and create tag
+      release_tag: ${{ inputs.tag }}
+  assemble:
+    name: Assemble and attest Lua release
     needs: [prepare, full-ci]
-    if: always() && needs.prepare.result == 'success'
     runs-on: ubuntu-24.04
     permissions:
-      actions: read
-      contents: write
+      contents: read
+      id-token: write
+      attestations: write
     steps:
-      # Never execute candidate code with a write token. This is the original
-      # workflow revision on main, and the candidate must be its ancestor.
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Report exact attempt results and create only the validated Git tag
-        env:
+      - uses: actions/download-artifact@v4
+        with:
+          name: lua-request-${{ github.run_attempt }}
+          path: build/evidence
+      - uses: actions/download-artifact@v4
+        with:
+          name: lua-quality-full-${{ github.run_attempt }}
+          path: build/evidence
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: lua-build-*-${{ github.run_attempt }}
+          path: build/evidence/builds
+      - env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
-          RELEASE_LUA_SHA: ${{ needs.prepare.outputs.sha }}
-          RELEASE_CORE_SHA: ${{ needs.prepare.outputs.core_sha }}
-          PREPARE_RESULT: ${{ needs.prepare.result }}
+        run: python -B scripts/release.py assemble
+      - uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: build/release/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lua-release-${{ github.run_attempt }}
+          path: build/release/*
+          if-no-files-found: error
+  publish:
+    needs: [full-ci, assemble]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      actions: read
+      attestations: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: lua-release-${{ github.run_attempt }}
+          path: build/release
+      - env:
+          GH_TOKEN: ${{ github.token }}
           FULL_CI_RESULT: ${{ needs.full-ci.result }}
-        run: python -B scripts/release.py finish
+          ASSEMBLE_RESULT: ${{ needs.assemble.result }}
+        run: python -B scripts/release.py publish
+
+  timings:
+    name: Lua release timings
+    if: always()
+    needs: [publish]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: python -B scripts/ci_timings.py --scope run --output build/timings.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lua-release-timings-${{ github.run_attempt }}
+          path: build/timings.json
+          if-no-files-found: error
