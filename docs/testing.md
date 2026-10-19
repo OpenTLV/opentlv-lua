@@ -25,133 +25,57 @@ inventory is recorded in [migration provenance](migration.md). The Query
 generator changes only how it locates the shared Core inputs; its Lua runner,
 fixture conversion, and assertions are preserved.
 
-## Workflow matrix
+## CI selection and ownership
 
-`.github/workflows/lua.yml` preserves the original event-dependent matrix:
+See [quality gates](quality-gates.md) for the four entry points and exact Full
+matrix. PR runs the complete Lua suite on one Linux Lua 5.4 configuration;
+Main runs only `tests/smoke.lua`. Full covers all four Lua 5.x ABIs on three
+platforms, Linux LuaJIT, shared Core, installed-package consumption and sanitizers.
 
-| Events | Operating systems | Lua versions | Jobs |
-| --- | --- | --- | ---: |
-| Main branch pushes and relevant pull requests | Ubuntu 24.04, Windows latest | 5.1, 5.3, 5.4 | 6 |
-| Manual dispatch, `v`-prefixed version tags, and release workflow calls | Ubuntu 24.04, Windows latest, macOS latest | 5.1, 5.3, 5.4 | 9 |
+| Tests | Lua-owned behavior |
+| --- | --- |
+| `module_spec.lua`, `reader_spec.lua`, `format_spec.lua`, `error_spec.lua` | Public API, module identity, argument conversion and diagnostic tables |
+| `codec_spec.lua`, `schema_spec.lua`, `writer_spec.lua`, `visitor_spec.lua` | Conversion, callbacks, retained inputs, ownership, GC and error propagation |
+| `program_spec.lua`, `query_document_spec.lua` | Query/Document userdata, continuations, finalizers, mutation and lifetime |
+| `failing_allocator.c` | Native helper for Lua allocation failure injection; no Core engine tests |
+| `query/lua_facade.py` | Generates Lua public-API checks from Core-owned corpus/reference |
+| `components.lua`, `nfc_type2.lua`, examples | Binding registration and public API integration |
+| `test_*.py` | Version, workflow, gate, dependency identity and publication rejection contracts |
 
-Lua 5.2 and LuaJIT remain supported runtimes but were not in the original CI
-matrix; this migration does not add matrix entries. The existing Lua action,
-LuaRocks setup, Windows shared Lua/MSVC configuration, dependency-install retry
-behavior, and read-only test permissions are preserved. Release workflow calls
-use the candidate SHA and full matrix; they keep their concurrency group
-separate from ordinary branch and tag CI.
-
-LuaRocks installs Busted and its dependencies for the selected Lua runtime.
-The workflow tests the standalone CMake build and separately builds and
-installs the rock into a fresh temporary tree with `luarocks make`.
-
-## CI execution
-
-After Lua and Busted setup, both platform paths invoke:
+The full runner requires all 15 CTest entries, positive Busted/Query counts and
+zero failed, pending or skipped tests. It builds Core only as the required
+library. It does not duplicate Core parser/writer suites. The shared corpus
+remains owned by Core and is always selected from the linked Core revision.
 
 ```sh
-python -B scripts/ci.py --lua-prefix .lua --build-dir build/ci
+python -B scripts/ci.py --lua-prefix /absolute/path/to/lua --runtime 5.4 --rocks
+python -B -m unittest discover -s tests -p 'test_*.py'
 ```
 
-The runner:
+Select `--lua-executable`, `--lua-include` and `--busted` explicitly when needed.
+Busted must use the same Lua runtime. `--core-source` is a local development
+override; CI otherwise resolves the declared Core pin/artifact policy. Full
+release runs reject local overrides. `--shared ON` selects shared Core;
+`CC=clang-18` with `--configuration Debug --sanitizer` selects Linux ASan/UBSan.
+Use `--smoke` for the narrow Main check, which does not need Busted.
 
-1. Requires the selected Lua interpreter, headers, and a Busted launcher.
-2. Configures CMake with package discovery disabled and the remote pin from
-   `cmake/Core.cmake`; no sibling checkout is selected implicitly.
-3. Records the resolved Core SHA and checks that the full Busted suite is
-   registered, so missing prerequisites cannot produce a silently reduced CI run.
-4. Builds `opentlv_lua`, including the existing native allocator helper, and runs
-   the existing CTest suite with verbose results and failure propagation.
-5. Generates and executes the existing Query facade runner using `corpus.json`
-   and `reference.py` from that same Core checkout.
+`--rocks` independently builds and installs the rock into a fresh tree with
+spaces in its path, checks installed version metadata and loads both modules
+from outside the checkout. Packaging uses static Core from the same source
+identity. The installed runtime search paths exclude inherited Lua initialization
+settings. Windows uses PowerShell/MSVC so Git Bash cannot shadow `link.exe`.
 
-CTest includes Busted, standalone Query/Document, codec, schema, writer,
-visitor, NFC and component tests, allocator failure checks, and all four
-existing examples. The additional Query corpus execution retains the original
-optimized/unoptimized, retained/streaming, input-window and Document checks.
-The migrated suite's assertions and expected results remain unchanged.
+The two official Lua 5.4 package configurations additionally run seven Lua scripts
+and the full Query corpus after extraction, with only the archive module paths.
+Allocator injection is exercised by the build suite, not shipped in the archive.
 
-After the existing suites, CI runs both Python regression suites with
-`python -B -m unittest discover -s tests -p "test_*.py"`.
-`tests/test_version.py` uses disposable Git repositories to check clean release tags, development
-commits, tracked/untracked changes, ambiguous tags, and source archives both
-inside and outside an enclosing repository.
+For component-reduced local builds, follow [development](development.md).
+The complete CI runner deliberately rejects reduced/skipped registration.
 
-`tests/test_release.py` uses local GitHub API fixtures
-to check release input and tag validation, exact commit identities, full matrix
-evidence, and rejection paths before tag creation. These tests do not contact
-GitHub or create release tags in this repository. Run the combined command
-locally, or select `python -B tests/test_version.py` or
-`python -B tests/test_release.py`, without building the Lua module.
+## Historical migration validation
 
-CI then invokes:
-
-```sh
-python -B scripts/check_luarocks.py --lua .lua/bin/lua \
-    --core-source build/ci/_deps/opentlv_core-src
-```
-
-Windows uses `.lua/bin/lua.exe`. The packaging check lints the rockspec,
-preconfigures `build/luarocks` with the same Core source tested above, and runs
-`luarocks make` from the repository root. It verifies both installed module
-files and matching version metadata. Lua runs from outside the checkout, with
-only that tree's module paths and no inherited Lua initialization settings,
-then checks module identity, preserved Core version reporting, and the existing
-quick-start example. The temporary tree includes spaces in its path and is
-removed when the check exits. No global rock installation is changed.
-
-For release workflow calls, the runner also verifies the requested Lua commit
-and canonical Core repository/pinned SHA. It records the actual completed
-CTest tests, Busted successes, Query fixtures, and Query checks. Successful
-evidence steps make these identities and counts available in the current
-Actions run; each matrix job writes a summary. The final release job verifies
-all nine jobs and required steps through the GitHub Actions API before creating
-a tag. It accepts evidence only from the current run attempt. See
-[release quality gates](releases.md) for the dispatch procedure and final report.
-
-Omit `--core-source` to exercise the rockspec's default Core selection with a
-fresh `build/luarocks` directory. LuaRocks must be configured for the interpreter
-passed to `--lua`; `--luarocks` can select an explicit executable.
-
-On Windows the workflow runs dependency installation and the CI runner from
-PowerShell so Git Bash's `link.exe` cannot shadow the MSVC linker. Python
-subprocesses propagate CMake, CTest, generator and Lua failures to the job.
-
-## Local runs
-
-For a complete CI-equivalent test run, use a Lua installation with matching
-headers and Busted already installed through LuaRocks:
-
-```sh
-python -B scripts/ci.py --lua-prefix /absolute/path/to/lua \
-    --build-dir build/ci-local --core-source /absolute/path/to/opentlv
-```
-
-The explicit Core override supports development and baseline comparison; the
-printed SHA identifies the selected checkout. Omit it to exercise the pinned
-remote fetch. Use a separate build directory for each Lua ABI and toolchain.
-`--lua-include`, `--lua-executable`, and `--busted` can select nonstandard layouts,
-for example system Lua headers in `/usr/include/lua5.4`.
-
-For ordinary local CMake runs, including reduced component configurations, use
-the commands in [development instructions](development.md). The full CI runner
-intentionally rejects a configuration where the Busted suite is skipped; the
-existing CTest component-aware tests still support reduced local builds.
-
-To run just the existing Query corpus against an already-built module:
-
-```sh
-python -B tests/query/lua_facade.py --core-source /absolute/path/to/opentlv \
-    --output build/lua-query-conformance.lua
-LUA_PATH='lua/?.lua;lua/?/init.lua;;' LUA_CPATH='build/local/?.so;;' \
-    lua build/lua-query-conformance.lua
-```
-
-Select the same Core revision used to build the module. An installed Core
-package does not contain the shared test corpus; supply the corresponding
-source checkout explicitly. On Windows use `.dll` in `LUA_CPATH` and the matching
-Lua executable. `-B` prevents Python bytecode files from being written into
-either repository.
+The comparisons below record migration-time results, not execution of the new
+quality gates or a claim of current hosted acceptance.
 
 ## Comparing with Core
 

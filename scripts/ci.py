@@ -1,253 +1,166 @@
-#!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Marek Cingel
-"""Build and run the existing Lua suites against the same Core as the corpus."""
+"""Build and verify the Lua boundary, with explicit dependency and runtime evidence."""
 
 import argparse
 import json
 import os
 from pathlib import Path
+import platform
 import re
 import shutil
 import subprocess
 import sys
 
-
-ROOT = Path(__file__).resolve().parents[1]
-CORE_REPOSITORY = "https://github.com/OpenTLV/opentlv.git"
-EXPECTED_TESTS = {
-    "Integration_lua",
-    "Integration_lua_query_document",
-    "Integration_lua_query_document_allocator",
-    "Integration_lua_codec",
-    "Integration_lua_codec_allocator",
-    "Integration_example_lua_codec",
-    "Integration_lua_schema",
-    "Integration_example_lua_schema",
-    "Integration_lua_visitor",
-    "Integration_lua_visitor_allocator",
-    "Integration_lua_writer",
-    "Integration_lua_nfc_type2",
-    "Integration_lua_components",
-    "Integration_example_lua_quick_start",
-    "Integration_example_lua_parse",
-}
+from lua_suite import EXPECTED_TESTS, checkout_sha, ctest_evidence, run, stream, summary
+from ci_support import ROOT, compiler, pin, require, write
+from verified_core import resolve
 
 
-def run(command, **kwargs):
-    command = [str(part) for part in command]
-    print("+ " + subprocess.list2cmdline(command), flush=True)
-    return subprocess.run(command, cwd=ROOT, check=True, **kwargs)
+def runtime(lua, expected):
+    result = run([lua, '-e', 'io.write(_VERSION); if jit then io.write(" ", jit.version) end'],
+                 stdout=subprocess.PIPE, text=True).stdout
+    if expected:
+        require(('LuaJIT' in result) if expected == 'luajit' else
+                (result == 'Lua ' + expected), 'Interpreter does not match the requested Lua runtime')
+    return result
 
 
-def stream(command, **kwargs):
-    """Keep the hosted log live while retaining the existing suite's evidence."""
-    command = [str(part) for part in command]
-    print("+ " + subprocess.list2cmdline(command), flush=True)
-    lines = []
-    with subprocess.Popen(command, cwd=ROOT, stdout=subprocess.PIPE,
-                          stderr=subprocess.STDOUT, text=True, encoding="utf-8",
-                          errors="replace", bufsize=1, **kwargs) as process:
-        for line in process.stdout:
-            print(line, end="", flush=True)
-            lines.append(line)
-        returncode = process.wait()
-    return subprocess.CompletedProcess(command, returncode, "".join(lines))
+def lua_environment(build):
+    env = {k: v for k, v in os.environ.items() if not k.startswith(('LUA_PATH', 'LUA_CPATH', 'LUA_INIT'))}
+    env['LUA_PATH'] = str(ROOT / 'lua/?.lua') + ';' + str(ROOT / 'lua/?/init.lua') + ';;'
+    env['LUA_CPATH'] = str(build / ('?.dll' if os.name == 'nt' else '?.so')) + ';;'
+    return env
 
 
-def checkout_sha(source, expected=None, canonical_core=False):
-    toplevel = run(["git", "-C", source, "rev-parse", "--show-toplevel"],
-                   stdout=subprocess.PIPE, text=True).stdout.strip()
-    if Path(toplevel).resolve() != source.resolve():
-        raise RuntimeError(f"Expected a Git checkout at {source}; found {toplevel}")
-    sha = run(["git", "-C", source, "rev-parse", "HEAD"],
-              stdout=subprocess.PIPE, text=True).stdout.strip()
-    if not re.fullmatch(r"[0-9a-f]{40}", sha):
-        raise RuntimeError(f"Invalid checkout SHA for {source}: {sha}")
-    if expected is not None:
-        if sha != expected:
-            raise RuntimeError(f"Checkout {source} is {sha}; expected {expected}")
-        dirty = run(["git", "-C", source, "status", "--porcelain", "--untracked-files=all"],
-                    stdout=subprocess.PIPE, text=True).stdout.strip()
-        if dirty:
-            raise RuntimeError(f"Release checkout is dirty: {source}")
-    if canonical_core:
-        origin = run(["git", "-C", source, "remote", "get-url", "origin"],
-                     stdout=subprocess.PIPE, text=True).stdout.strip()
-        if origin != CORE_REPOSITORY:
-            raise RuntimeError(f"Release Core origin must be {CORE_REPOSITORY}; got {origin}")
-    return sha
-
-
-def ctest_evidence(output, evidence):
-    # Busted may color its summary when the runner is configured for ANSI output.
-    plain = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", output)
-    summaries = re.findall(
-        r"^(\d+)% tests passed(?:, (\d+) tests failed)? out of (\d+)\s*$",
-        plain, re.MULTILINE)
-    if len(summaries) == 1:
-        percentage, failed, total = summaries[0]
-        # Newer CTest omits the zero-failure clause for a fully passing suite.
-        if percentage == "100" or (failed and int(failed) > 0):
-            failed, total = int(failed or 0), int(total)
-            evidence.update(ctest_passed=total - failed, ctest_total=total)
-    busted = re.findall(
-        r"^\s*(?:\d+:\s*)?(\d+) success(?:es)? / (\d+) failures? / (\d+) errors? / (\d+) pending\b",
-        plain, re.MULTILINE)
-    if len(busted) == 1:
-        passed, failed, errors, pending = map(int, busted[0])
-        evidence.update(busted_passed=passed, busted_failed=failed,
-                        busted_errors=errors, busted_pending=pending)
-    return plain
-
-
-def summary(evidence):
-    target = os.environ.get("GITHUB_STEP_SUMMARY")
-    if not target:
-        return
-
-    def value(key):
-        return str(evidence.get(key, "not available")).replace("|", "\\|").replace("\n", " ")
-
-    lines = ["### Lua test evidence", "", f"Result: **{value('status')}**", "",
-             "| Evidence | Result |", "| --- | --- |"]
-    if os.environ.get("RELEASE_VERSION"):
-        lines.append(f"| Release candidate | `{os.environ['RELEASE_VERSION']}` |")
-    lines.extend([
-        f"| Lua commit | `{value('lua_sha')}` |",
-        f"| Core commit | `{value('core_sha')}` |",
-        f"| Core source | `{value('core_source')}` |",
-        f"| CTest | {value('ctest_passed')}/{value('ctest_total')} passed |",
-        f"| Busted | {value('busted_passed')} passed, {value('busted_failed')} failures, "
-        f"{value('busted_errors')} errors, {value('busted_pending')} pending |",
-        f"| Query corpus | {value('query_fixtures')} fixtures, {value('query_checks')} checks passed |",
-        "",
-    ])
-    if evidence.get("canonical_core"):
-        lines.extend([f"Verified Core origin: {CORE_REPOSITORY}", ""])
-    if "error" in evidence:
-        lines.extend([f"Failed during **{value('stage')}**: {value('error')}", ""])
-    with open(target, "a", encoding="utf-8") as handle:
-        handle.write("\n".join(lines) + "\n")
-
-
-def execute(evidence):
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--lua-prefix", type=Path, required=True)
-    parser.add_argument("--lua-include", type=Path)
-    parser.add_argument("--lua-executable", type=Path)
-    parser.add_argument("--busted", type=Path)
-    parser.add_argument("--build-dir", type=Path, default=Path("build/ci"))
-    parser.add_argument("--core-source", type=Path,
-                        help="Explicit local Core for baseline comparisons; CI uses the pinned fetch")
-    args = parser.parse_args()
-    # Workflow expressions are empty on ordinary push/PR runs.
-    expected_lua = os.environ.get("RELEASE_LUA_SHA") or None
-    expected_core = os.environ.get("RELEASE_CORE_SHA") or None
-    release = expected_lua is not None or expected_core is not None
-    if release and not all(re.fullmatch(r"[0-9a-f]{40}", sha or "")
-                           for sha in (expected_lua, expected_core)):
-        raise RuntimeError("Release CI requires both RELEASE_LUA_SHA and RELEASE_CORE_SHA as full lowercase SHAs")
-    evidence["stage"] = "Lua checkout verification"
-    evidence["lua_sha"] = checkout_sha(ROOT, expected_lua)
-    prefix = args.lua_prefix.resolve()
+def execute(args, evidence):
     build = args.build_dir.resolve()
-    lua = (args.lua_executable or prefix / "bin" / ("lua.exe" if os.name == "nt" else "lua")).resolve()
-    include = (args.lua_include or prefix / "include").resolve()
-    busted = args.busted or shutil.which("busted")
-    if not lua.is_file() or not (include / "lua.h").is_file():
-        parser.error("Select a Lua interpreter and matching development headers")
-    if not busted or not Path(busted).is_file():
-        parser.error("Busted is required: install it with LuaRocks for the selected Lua runtime")
-    busted = Path(busted).resolve()
-    core = args.core_source.resolve() if args.core_source else build / "_deps/opentlv_core-src"
-    evidence["core_source"] = str(core)
-
-    # Lua 5.1 prints its version on stderr even on success.
-    evidence["stage"] = "configuration"
-    run([lua, "-v"], stderr=subprocess.STDOUT)
-    run(["cmake", "-S", ROOT, "-B", build, "-DCMAKE_BUILD_TYPE=Release",
-         "-DFETCHCONTENT_TRY_FIND_PACKAGE_MODE=NEVER",
-         "-DFETCHCONTENT_FULLY_DISCONNECTED=OFF",
-         "-DFETCHCONTENT_BASE_DIR=" + str(build / "_deps"),
-         "-DFETCHCONTENT_SOURCE_DIR_OPENTLV_CORE=" + (str(core) if args.core_source else ""),
-         "-DOPENTLV_BUILD_LUA_TESTS=ON", "-DLUA_INCLUDE_DIR=" + str(include),
-         "-DOPENTLV_LUA_EXECUTABLE=" + str(lua),
-         "-DOPENTLV_BUSTED_EXECUTABLE=" + str(busted)])
-    evidence["stage"] = "Core checkout verification"
-    evidence["core_sha"] = checkout_sha(core, expected_core, canonical_core=release)
-    evidence["canonical_core"] = release
-    evidence["stage"] = "test registration"
-    # Require the complete standalone suite, without enabling Core's own tests.
-    listing = run(["ctest", "--test-dir", build, "-C", "Release", "--show-only=json-v1"],
-                  stdout=subprocess.PIPE, text=True)
-    tests = json.loads(listing.stdout)["tests"]
-    names = {test["name"] for test in tests}
-    if names != EXPECTED_TESTS or len(tests) != len(EXPECTED_TESTS):
-        raise RuntimeError("The complete standalone CTest suite must be registered; "
-                           f"missing: {sorted(EXPECTED_TESTS - names)}, "
-                           f"unexpected: {sorted(names - EXPECTED_TESTS)}")
-
-    evidence["stage"] = "build"
-    run(["cmake", "--build", build, "--target", "opentlv_lua", "--config", "Release"])
-    evidence["stage"] = "CTest and Busted"
-    ctest = stream(["ctest", "--test-dir", build, "-C", "Release", "--no-tests=error",
-                    "--output-on-failure", "--verbose"])
-    plain = ctest_evidence(ctest.stdout, evidence)
-    ctest.check_returncode()
-    if (evidence.get("ctest_passed") != len(EXPECTED_TESTS)
-            or evidence.get("ctest_total") != len(EXPECTED_TESTS)
-            or not evidence.get("busted_passed", 0)
-            or any(evidence.get(key) != 0 for key in ("busted_failed", "busted_errors", "busted_pending"))
-            or re.search(r"\*\*\*\s*(?:Not Run|Skipped|Disabled)", plain)):
-        raise RuntimeError("CTest and Busted must report the full suite passing without skipped tests")
-    evidence["stage"] = "Query corpus generation"
-    output = build / "lua-query-conformance.lua"
-    run([sys.executable, "-B", ROOT / "tests/query/lua_facade.py",
-         "--core-source", core, "--output", output])
-    env = os.environ.copy()
-    env["LUA_PATH"] = ";".join((str(ROOT / "lua/?.lua"), str(ROOT / "lua/?/init.lua"),
-                                env.get("LUA_PATH", ";")))
-    suffix = ".dll" if os.name == "nt" else ".so"
-    env["LUA_CPATH"] = str(build / ("?" + suffix)) + ";" + env.get("LUA_CPATH", ";")
-    evidence["stage"] = "Query corpus"
-    query = stream([lua, output], env=env)
-    counts = re.findall(r"^Lua public Query facade: (\d+) fixtures, (\d+) backend/window checks passed\s*$",
-                        query.stdout, re.MULTILINE)
-    if len(counts) == 1:
-        evidence.update(zip(("query_fixtures", "query_checks"), map(int, counts[0])))
-    query.check_returncode()
-    if not evidence.get("query_fixtures", 0) or not evidence.get("query_checks", 0):
-        raise RuntimeError("The Query corpus did not report positive fixture and check counts")
-    if release:
-        evidence["stage"] = "final checkout verification"
-        checkout_sha(ROOT, expected_lua)
-        checkout_sha(core, expected_core, canonical_core=True)
-    # Downstream release steps can consume evidence only after every suite passed.
-    evidence["stage"] = "publishing test evidence"
-    if os.environ.get("GITHUB_OUTPUT"):
-        with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
-            for key in ("lua_sha", "core_sha", "ctest_passed", "ctest_total", "busted_passed",
-                        "query_fixtures", "query_checks"):
-                handle.write(f"{key}={evidence[key]}\n")
+    prefix = args.lua_prefix.resolve()
+    lua = (args.lua_executable or prefix / 'bin' / ('lua.exe' if os.name == 'nt' else 'lua')).resolve()
+    include = (args.lua_include or prefix / 'include').resolve()
+    if not args.lua_include and not (include / 'lua.h').is_file():
+        candidates = list(include.glob('luajit-*/lua.h'))
+        require(len(candidates) == 1, 'Expected one LuaJIT header directory')
+        include = candidates[0].parent
+    require(lua.is_file() and (include / 'lua.h').is_file(), 'Lua interpreter and matching headers required')
+    evidence.update(lua_sha=checkout_sha(ROOT, os.environ.get('GITHUB_SHA') if args.release else None),
+                    system=platform.system(), architecture=platform.machine(),
+                    runtime=runtime(lua, args.runtime), requested_runtime=args.runtime,
+                    shared=args.shared, sanitizer=args.sanitizer, configuration=args.configuration,
+                    stage='dependency')
+    require(not (args.release and args.core_source), 'Release forbids local Core overrides')
+    if args.core_source:
+        core = args.core_source.resolve()
+        options = ['-DFETCHCONTENT_SOURCE_DIR_OPENTLV_CORE=' + str(core)]
+        dependency = {'mode': 'local-source', 'verified': False, 'commit': checkout_sha(core)}
+    else:
+        options, dependency = resolve(build / 'verified-core', args.shared, args.configuration,
+                                      required=args.release, source_only=args.sanitizer)
+        core = Path(dependency.get('source_path', build / '_deps/opentlv_core-src'))
+    evidence.update(core=dependency, core_sha=dependency['commit'], core_source=str(core))
+    busted = args.busted or shutil.which('busted')
+    require(args.smoke or (busted and Path(busted).is_file()), 'Busted is required for the complete suite')
+    command = ['cmake', '-S', ROOT, '-B', build, '-DCMAKE_BUILD_TYPE=' + args.configuration,
+               '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON', '-DFETCHCONTENT_TRY_FIND_PACKAGE_MODE=NEVER',
+               '-DFETCHCONTENT_SOURCE_DIR_OPENTLV_CORE=', '-DOPENTLV_LUA_CORE_PACKAGE=',
+               '-DFETCHCONTENT_BASE_DIR=' + str(build / '_deps'),
+               '-DOPENTLV_BUILD_SHARED_LIBS=' + args.shared,
+               '-DOPENTLV_BUILD_LUA_TESTS=' + ('OFF' if args.smoke else 'ON'),
+               '-DLUA_INCLUDE_DIR=' + str(include), '-DOPENTLV_LUA_EXECUTABLE=' + str(lua)]
+    if busted:
+        command.append('-DOPENTLV_BUSTED_EXECUTABLE=' + str(Path(busted).resolve()))
+    if args.sanitizer:
+        require(sys.platform == 'linux', 'Sanitizer runner is Linux only')
+        flags = '-fsanitize=address,undefined -fno-omit-frame-pointer'
+        command += ['-DCMAKE_C_FLAGS=' + flags, '-DCMAKE_SHARED_LINKER_FLAGS=' + flags,
+                    '-DCMAKE_MODULE_LINKER_FLAGS=' + flags]
+    run(command + options)
+    if not dependency['verified']:
+        actual = checkout_sha(core, pin('Core') if not args.core_source else None)
+        require(actual == dependency['commit'], 'Core selection differs from recorded dependency')
+    evidence.update(compiler=compiler(build), stage='build')
+    run(['cmake', '--build', build, '--target', 'opentlv_lua', '--config', args.configuration, '--parallel', '2'])
+    env = lua_environment(build)
+    if args.sanitizer:
+        # An instrumented module is dlopen'ed by an uninstrumented interpreter.
+        # Preload the same compiler's runtime before executing any Lua process.
+        cc = os.environ.get('CC', 'cc')
+        library = 'libclang_rt.asan-x86_64.so' if 'clang' in cc else 'libasan.so'
+        preload = run([cc, '-print-file-name=' + library], stdout=subprocess.PIPE, text=True).stdout.strip()
+        require(Path(preload).is_file(), 'Cannot locate the sanitizer runtime')
+        env.update(LD_PRELOAD=preload, ASAN_OPTIONS='detect_leaks=1:halt_on_error=1',
+                   UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1')
+    evidence['stage'] = 'Lua tests'
+    if args.smoke:
+        run([lua, ROOT / 'tests/smoke.lua'], env=env)
+        evidence['smoke'] = True
+    else:
+        listing = run(['ctest', '--test-dir', build, '-C', args.configuration, '--show-only=json-v1'],
+                      stdout=subprocess.PIPE, text=True)
+        tests = json.loads(listing.stdout)['tests']
+        require(len(tests) == len(EXPECTED_TESTS) and {t['name'] for t in tests} == EXPECTED_TESTS,
+                'Incomplete or unexpected Lua suite (Core suites must remain disabled)')
+        result = stream(['ctest', '--test-dir', build, '-C', args.configuration, '--no-tests=error',
+                         '--output-on-failure', '--verbose'], env=env)
+        plain = ctest_evidence(result.stdout, evidence)
+        result.check_returncode()
+        require(evidence.get('ctest_passed') == evidence.get('ctest_total') == len(EXPECTED_TESTS) and
+                evidence.get('busted_passed', 0) > 0 and
+                all(evidence.get(k) == 0 for k in ('busted_failed', 'busted_errors', 'busted_pending')) and
+                not re.search(r'\*\*\*\s*(?:Not Run|Skipped|Disabled)', plain), 'Incomplete Lua test evidence')
+        output = build / 'lua-query-conformance.lua'
+        run([sys.executable, '-B', ROOT / 'tests/query/lua_facade.py', '--core-source', core, '--output', output])
+        result = stream([lua, output], env=env)
+        result.check_returncode()
+        counts = re.findall(r'^Lua public Query facade: (\d+) fixtures, (\d+) backend/window checks passed\s*$',
+                            result.stdout, re.MULTILINE)
+        require(len(counts) == 1 and min(map(int, counts[0])) > 0, 'Missing Query facade evidence')
+        evidence.update(zip(('query_fixtures', 'query_checks'), map(int, counts[0])))
+        evidence['tests'] = sorted(EXPECTED_TESTS)
+    if args.rocks:
+        evidence['stage'] = 'LuaRocks'
+        # Always build the rock with static Core, from the same verified source.
+        # Shared-library distribution is covered by the standalone build matrix.
+        run([sys.executable, '-B', ROOT / 'scripts/check_luarocks.py', '--lua', lua, '--core-source', core])
+        evidence['luarocks'] = True
+    if args.package:
+        require(args.shared == 'OFF' and not args.sanitizer, 'Official module packages use static Core')
+        from check_dependency import check
+        evidence['dependency_checks'] = check(build, lua, include, core)
+        from lua_package import package
+        evidence['package'] = package(build, lua, core, args.package, evidence, args.release)
+    if args.release:
+        checkout_sha(ROOT, os.environ['GITHUB_SHA'])
+    evidence.update(status='passed', stage='complete')
 
 
 def main():
-    evidence = {"status": "failed", "stage": "arguments"}
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--lua-prefix', type=Path, required=True)
+    parser.add_argument('--lua-executable', type=Path)
+    parser.add_argument('--lua-include', type=Path)
+    parser.add_argument('--busted', type=Path)
+    parser.add_argument('--build-dir', type=Path, default=Path('build/ci'))
+    parser.add_argument('--core-source', type=Path)
+    parser.add_argument('--runtime', default='')
+    parser.add_argument('--shared', choices=('ON', 'OFF'), default='OFF')
+    parser.add_argument('--configuration', choices=('Debug', 'Release'), default='Release')
+    parser.add_argument('--smoke', action='store_true')
+    parser.add_argument('--sanitizer', action='store_true')
+    parser.add_argument('--rocks', action='store_true')
+    parser.add_argument('--release', action='store_true')
+    parser.add_argument('--package', choices=('linux-x64-lua54', 'windows-x64-lua54'))
+    parser.add_argument('--output', type=Path, default=Path('build/test-evidence.json'))
+    args = parser.parse_args()
+    evidence = {'schema': 1, 'status': 'failed', 'repository': os.environ.get('GITHUB_REPOSITORY', 'local'),
+                'commit': os.environ.get('GITHUB_SHA', ''), 'run_id': os.environ.get('GITHUB_RUN_ID', ''),
+                'run_attempt': os.environ.get('GITHUB_RUN_ATTEMPT', ''), 'id': os.environ.get('LUA_JOB_ID', 'local')}
     try:
-        execute(evidence)
-        evidence["status"] = "passed"
-    except BaseException as error:
-        evidence["error"] = str(error)
-        raise
+        execute(args, evidence)
     finally:
+        write(args.output, evidence)
         summary(evidence)
 
 
-if __name__ == "__main__":
-    try:
-        main()
-    except subprocess.CalledProcessError as error:
-        raise SystemExit(error.returncode)
-    except RuntimeError as error:
-        raise SystemExit(str(error))
+if __name__ == '__main__':
+    main()

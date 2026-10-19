@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Marek Cingel
+name: Lua CodeQL
+on:
+  workflow_call:
+permissions:
+  contents: read
+  actions: read
+  security-events: write
+jobs:
+  analyze:
+    runs-on: ubuntu-24.04
+    env:
+      CC: clang-18
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - run: sudo apt-get update && sudo apt-get install -y clang-18 ninja-build liblua5.4-dev
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: cpp
+          queries: security-extended
+      - run: |
+          cmake -S . -B build/codeql -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+            -DOPENTLV_BUILD_LUA_TESTS=OFF -DLUA_INCLUDE_DIR=/usr/include/lua5.4 \
+            -DFETCHCONTENT_TRY_FIND_PACKAGE_MODE=NEVER
+          cmake --build build/codeql --target opentlv_lua --parallel 2
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:cpp

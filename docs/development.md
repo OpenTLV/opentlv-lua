@@ -9,7 +9,7 @@ compiler or `tlv++` target is required.
 
 The CMake minimum supports the
 [FetchContent package discovery integration](https://cmake.org/cmake/help/v3.24/module/FetchContent.html#integrating-with-find-package).
-Core is resolved in this order:
+Without an explicit `OPENTLV_LUA_CORE_PACKAGE`, Core is resolved in this order:
 
 1. Explicit `FETCHCONTENT_SOURCE_DIR_OPENTLV_CORE` checkout.
 2. Installed `OpenTLVConfig.cmake` package.
@@ -41,6 +41,14 @@ not modified. Its public generated headers and include directories propagate
 through `OpenTLV::tlv`.
 
 ## Installed Core
+
+For an exact package selection, set
+`-DOPENTLV_LUA_CORE_PACKAGE=/absolute/path/to/prefix/lib/cmake/OpenTLV` to the
+directory containing `OpenTLVConfig.cmake`. A missing package or simultaneous
+source override is an error; this mode never falls back to Git or another
+discoverable package. CMake selection alone does not authenticate the producer.
+The [CI resolver](quality-gates.md#core-verification) additionally verifies
+release checksums, attestations and compatibility before selecting this mode.
 
 Build and install Core with its public CMake target support (Core #620 or newer).
 For example, from this repository:

@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Marek Cingel
+name: Lua checks
+on:
+  workflow_call:
+    inputs:
+      tier:
+        type: string
+        required: true
+      release_tag:
+        type: string
+        default: ''
+permissions:
+  contents: read
+  attestations: read
+  actions: read
+  security-events: write
+jobs:
+  build:
+    uses: ./.github/workflows/lua.yml
+    with:
+      tier: ${{ inputs.tier }}
+      release_tag: ${{ inputs.release_tag }}
+  quality:
+    uses: ./.github/workflows/quality.yml
+  codeql:
+    uses: ./.github/workflows/lua-codeql.yml
+  gate:
+    name: Lua quality gate
+    if: always()
+    needs: [build, quality, codeql]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: lua-build-*-${{ github.run_attempt }}
+          path: build/evidence
+      - env:
+          CHECK_RESULTS: ${{ toJSON(needs) }}
+          TIER: ${{ inputs.tier }}
+        run: python -B scripts/release.py gate --tier "$TIER" --output build/quality.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lua-quality-${{ inputs.tier }}-${{ github.run_attempt }}
+          path: build/quality.json
+          if-no-files-found: error

@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Align Lua PR, Main, Full and Release gates with runtime and sanitizer coverage, verified Core dependencies, validated module packages and CI timing evidence. (#13)
 - Own the migrated Lua API guide and implementation notes, link standalone build/test instructions and preserve the initial README as a historical provenance artifact. (OpenTLV/opentlv-docs#27)
 - Adapt standalone LuaRocks installation, add Lua version metadata independent of Core, and gate manual release tags on the full Lua CI matrix with verified commit/Core provenance and test-count summaries. (#4)
 - Add standalone Lua CI with the existing platform and Lua version matrix, LuaRocks test dependencies, and Query facade conformance checks using the pinned Core corpus. (#3)

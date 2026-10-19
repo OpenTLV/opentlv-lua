@@ -1037,7 +1037,7 @@ static int execution_finish_run(lua_State* L) {
     tlv_query_diagnostic_t diagnostic = {0};
     tlv_result_t           rc =
         q->has_reader ? tlv_query_program_visit(&q->reader, q->exec, drain_event, NULL, &diagnostic)
-                      : tlv_query_exec_finish(q->exec, &diagnostic);
+                                : tlv_query_exec_finish(q->exec, &diagnostic);
     return rc == TLV_OK ? 0 : provider_error(L, q->program, rc, &diagnostic);
 }
 static int execution_finish(lua_State* L) {
@@ -1291,6 +1291,8 @@ static int execution_edit_run(lua_State* L) {
         capacity = (size_t)bound;
     }
     if (capacity > SIZE_MAX / sizeof(tlv_node_t*)) return query_error(L, TLV_ERR_OVERFLOW, NULL);
+    // Userdata stores an array of borrowed node pointers, not node objects.
+    // NOLINTNEXTLINE(bugprone-sizeof-expression)
     tlv_node_t** targets = lua_newuserdata(L, capacity * sizeof *targets);
     lua_rawgeti(L, LUA_REGISTRYINDEX, q->document_ref);
     tlv_document_t*        document = opentlv_lua_document_native(L, lua_gettop(L));
@@ -1416,7 +1418,9 @@ static int query_schema_validate(lua_State* L) {
     lua_pushnil(L);
     int                      error_index = lua_gettop(L);
     tlv_schema_query_rule_t* rules = lua_newuserdata(L, count * sizeof *rules);
-    program_t**              owners = lua_newuserdata(L, 2 * count * sizeof *owners);
+    // Keep two borrowed program pointers per rule; Lua registry references own them.
+    // NOLINTNEXTLINE(bugprone-sizeof-expression)
+    program_t** owners = lua_newuserdata(L, 2 * count * sizeof *owners);
     lua_newtable(L);
     int                 keepers = lua_gettop(L);
     const tlv_format_t* format = NULL;

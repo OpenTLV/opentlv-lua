@@ -57,11 +57,11 @@ The rock installs both modules and Lua binding version metadata. Lua release
 tags are independent of Core; `opentlv.version()` and `opentlv._VERSION`
 continue to report Core. See [versioning](docs/versioning.md).
 
-The manual [release quality gate](docs/releases.md) tests an exact Lua commit
-against the pinned Core across all nine OS/Lua combinations before creating
-its `v`-prefixed Git tag. The first release version is `0.1.0`, producing tag
-`v0.1.0`; the workflow creates only the tag, with results recorded in the
-Actions summary.
+The [quality gates](docs/quality-gates.md) separate PR, Main, Full and Release
+verification. Full covers Lua 5.1–5.4 on Linux/Windows/macOS, Linux LuaJIT,
+shared Core and sanitizers. The manual [release gate](docs/releases.md) requires
+an authenticated Core release and same-attempt Full evidence before publishing
+validated Lua 5.4 module archives and a `v`-prefixed tag.
 
 ## Migration status
 
@@ -90,7 +90,7 @@ historical Core layout, not the standalone build.
 | `tests/` | Existing Lua tests and native failing allocator helper |
 | `CMakeLists.txt` | Standalone binding build and existing test registration |
 | `opentlv-scm-1.rockspec` | Standalone LuaRocks build and installation metadata |
-| `.github/workflows/release.yml` | Manual quality gate and Git tag creation |
+| `.github/workflows/release.yml` | Manual release verification and artifact publication |
 | `docs/migration/` | Initial source inventory |
 | `provenance/` | Byte-preserved historical README |
 

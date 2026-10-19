@@ -1,0 +1,2 @@
+Checks: '-*,clang-analyzer-*,bugprone-sizeof-expression,bugprone-suspicious-memset-usage,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling'
+WarningsAsErrors: '*'
