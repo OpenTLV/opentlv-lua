@@ -30,6 +30,10 @@ def lua_environment(build):
     env = {k: v for k, v in os.environ.items() if not k.startswith(('LUA_PATH', 'LUA_CPATH', 'LUA_INIT'))}
     env['LUA_PATH'] = str(ROOT / 'lua/?.lua') + ';' + str(ROOT / 'lua/?/init.lua') + ';;'
     env['LUA_CPATH'] = str(build / ('?.dll' if os.name == 'nt' else '?.so')) + ';;'
+    if os.name == 'nt':
+        # Lua's Windows loader searches PATH for dependencies of _core.dll.
+        # CMake stages the selected shared Core DLL in this module directory.
+        env['PATH'] = str(build / 'opentlv') + os.pathsep + env.get('PATH', '')
     return env
 
 

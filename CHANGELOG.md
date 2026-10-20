@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Make shared Core DLLs discoverable by Windows Lua tests and run the LuaRocks package manager under PUC Lua for LuaJIT to avoid oversized-manifest failures. (#13)
 - Use `v`-prefixed Lua release tags while accepting an unprefixed semantic version, preserving release quality gates and reporting the semantic binding version separately from the full Git tag. (#11)
 - Accept both CTest success-summary formats in Lua CI so passing Windows suites continue to the Query and packaging checks. (#4)
 

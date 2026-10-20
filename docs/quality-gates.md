@@ -37,6 +37,11 @@ installed Core package, reject missing/conflicting explicit package selections,
 and validate a relocated module archive. macOS and other Lua ABIs are tested,
 but have no official binary archive in this initial package policy.
 
+The LuaJIT job runs only the LuaRocks package manager with PUC Lua 5.1 because
+the public package manifest exceeds LuaJIT's per-function constant limit.
+LuaRocks remains configured for LuaJIT headers and executable; Busted, the
+complete Lua suite, Query corpus and installed rock still run with LuaJIT.
+
 The always-running aggregate gate requires every named job and configuration.
 Missing, duplicate, cancelled, failed or unexpectedly skipped evidence fails.
 Records include repository, exact Lua/Core SHA, run, attempt, interpreter,
