@@ -72,8 +72,8 @@ allocation errors cannot unwind across the core and recursive calls do not
 overwrite callback state.
 
 `Integration_lua_codec`, `Integration_lua_codec_allocator` and
-`Integration_example_lua_codec` run standalone without busted, including
-minimal builds. The codec suite also runs under `busted tests` and checks
+`Integration_example_lua_codec` run standalone without busted.
+The codec suite also runs under `busted tests` and checks
 every exported static descriptor. Structure codecs remain outside this
 Value-codec binding.
 
@@ -87,8 +87,8 @@ The C core remains allocation-free; Lua userdata finalizers release storage
 allocated by the binding, including after partial constructor failures.
 
 `tests/writer_spec.lua` runs both under busted and directly with Lua. CTest
-registers the standalone suite whenever the interpreter is available, even
-when optional formats are disabled. It covers binary strings, Reader/Writer
+registers the standalone suite whenever the interpreter is available.
+It covers binary strings, Reader/Writer
 roundtrips, exact preset bytes, ownership, nested output, resource exhaustion
 and structured diagnostics.
 
@@ -107,8 +107,8 @@ schema reports or a basic native-code/offset diagnostic on fatal failures.
 `src/error.c` provides common `tlv_diagnostic_t` conversion shared with Reader
 and Writer; Schema adds only the typed detail exposed by the C report.
 
-`tests/schema_spec.lua` runs under busted and directly through CTest, including
-builds without BER. It covers rules, groups, ordering, paths, native offsets,
+`tests/schema_spec.lua` runs under busted and directly through CTest.
+It covers rules, groups, ordering, paths, native offsets,
 capacity/count-only results, malformed input, numeric checks, immutable
 configuration and garbage collection. When the test allocator is available,
 it also injects failures during construction and diagnostic conversion and
@@ -118,7 +118,7 @@ checks that retained child schemas are released.
 
 `tests/query_document_spec.lua` runs directly through CTest and under busted.
 It covers query diagnostics and matching, mutation rollback, foreign and stale
-handles, configured Format lifetimes, and optional-component builds. Its
+handles and configured Format lifetimes. Its
 `--allocator` mode injects Lua allocation failures during construction, result
 conversion, insertion and serialization. Document userdata acquire their
 finalizer before allocating native state; Node userdata root the owning

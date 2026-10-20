@@ -20,8 +20,9 @@ working-file hashes.
 | `tests/query/corpus.json` | `5e9d24f37a31562246959bfaeab23029337d539f5b5e1b6b3ad955040ad23612` |
 | `tests/query/reference.py` | `70f8c7db87a715b63f8865fa3e48c566fb195ade159d49649bcd53ce9b99cc3d` |
 
-The existing Lua tests and examples retain their original contents. Their
-inventory is recorded in [migration provenance](migration.md). The Query
+The initial Lua test and example inventory is recorded in
+[migration provenance](migration.md). The component smoke test now requires
+every supported feature in the official build. The Query
 generator changes only how it locates the shared Core inputs; its Lua runner,
 fixture conversion, and assertions are preserved.
 
@@ -69,8 +70,12 @@ The two official Lua 5.4 package configurations additionally run seven Lua scrip
 and the full Query corpus after extraction, with only the archive module paths.
 Allocator injection is exercised by the build suite, not shipped in the archive.
 
-For component-reduced local builds, follow [development](development.md).
-The complete CI runner deliberately rejects reduced/skipped registration.
+Every CI row uses the same full Core feature set described in
+[development](development.md#components-and-tests). Runtime, platform, linkage
+and sanitizer coverage remain independent of feature selection. The complete
+CI runner rejects skipped registration. Tooling regressions exercise source
+configuration enforcement and rejection of incomplete installed Core packages;
+they do not validate Core's modular build combinations.
 
 ## Historical migration validation
 

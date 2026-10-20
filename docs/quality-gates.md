@@ -63,7 +63,11 @@ digests. Release preflight locks both the release ID and authenticated manifest
 digest; replacing either blocks publication.
 
 A binary is preferred only when OS, architecture, compiler, configuration,
-linkage and libc/MSVC runtime match. Static non-Windows libraries also require
+linkage and libc/MSVC runtime match and its manifest declares every feature in
+`cmake/core-features.json` enabled. Missing or disabled features make a binary
+incompatible; the existing verified-source fallback policy then applies.
+CMake independently validates the selected package's public `tlv/config.h`.
+Static non-Windows libraries also require
 an explicit PIC declaration. The initial Core producer does not declare it,
 so these module builds use Verified Source. macOS and sanitizer builds likewise
 need source. Source fallback requires `allow_verified_source: true`; an

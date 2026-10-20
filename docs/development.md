@@ -127,15 +127,26 @@ variables apply only to the current shell and its child processes.
 
 ## Components and tests
 
-The existing Lua API requires Reader, Writer, Query, Schema, and Codec. The
-configure step rejects a Core build missing any of those capabilities.
-Document and built-in format families remain optional. For a source dependency,
-set Core options such as `-DOPENTLV_DOCUMENT=OFF` or `-DOPENTLV_EMV=OFF` when
-configuring Lua. For an installed Core, configure these when building Core.
+Official Lua builds and packages include all stable Core functionality supported
+by the binding: Reader, Writer, Document, Query (including its text frontend and
+set operations), Schema, Codec, ASN.1/BER/CER/DER, Bluetooth, EMV, NFC, DHCP and
+LLDP. This does not add Lua APIs for Core functionality the binding does not expose.
 
-Lua source selection and test expectations read the selected Core's generated
-public `tlv/config.h`, including normalized format options. Consumer cache
-variables cannot change the capabilities of an installed Core package.
+The requirements are recorded in [`cmake/core-features.json`](../cmake/core-features.json).
+When building Core from source, Lua explicitly enables every requirement as an
+internal CMake setting, replacing old cache or command-line `OFF` values.
+Individual Core modules cannot be disabled through Lua binding CMake options.
+Newly supported modules must be added to these standard requirements.
+
+The selected Core's public generated `tlv/config.h` must confirm every required
+feature. An incomplete installed Core is rejected during configuration; consumer
+cache values cannot enable code missing from that library. Build/install a full
+Core package or select Core source instead.
+
+Custom source modifications are possible but are not official release
+configurations. Core retains its own modular build policy for C/C++ consumers.
+Lua build controls such as shared/static Core, warnings, dependency selection
+and test registration remain available.
 
 Existing tests are registered by default (`OPENTLV_BUILD_LUA_TESTS=ON`). Supply
 `OPENTLV_LUA_EXECUTABLE` and `OPENTLV_BUSTED_EXECUTABLE` if discovery does not
@@ -148,8 +159,8 @@ ctest --test-dir build/local -C Release --output-on-failure
 ```
 
 CTest sets module search paths for the existing Lua tests, examples, and native
-allocator helper. The Busted suite requires BER, CER, DER, and Bluetooth;
-without them it is skipped and the existing component-aware tests remain.
+allocator helper. All supported sources and component tests are registered
+without feature-selection conditions. Without Busted, its suite is skipped.
 Without an interpreter, runtime tests are skipped. A successful configure or
 build alone therefore does not demonstrate a passing runtime suite. Set
 `OPENTLV_BUILD_LUA_TESTS=OFF` for a module-only build.

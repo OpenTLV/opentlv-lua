@@ -3,6 +3,23 @@
 
 include(FetchContent)
 
+# Official Lua builds have one feature configuration. Keep this list shared
+# with the verified-binary resolver; these are requirements, not user options.
+set(_core_features_file "${CMAKE_CURRENT_LIST_DIR}/core-features.json")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_core_features_file}")
+file(READ "${_core_features_file}" _core_features_json)
+string(JSON _core_features_count LENGTH "${_core_features_json}")
+math(EXPR _core_features_last "${_core_features_count} - 1")
+set(_core_features "")
+foreach(_index RANGE ${_core_features_last})
+    string(JSON _feature GET "${_core_features_json}" ${_index})
+    list(APPEND _core_features "${_feature}")
+    # Replace stale/command-line OFF values and hide Core feature selection
+    # from cmake-gui. Installed packages are checked independently below.
+    set(${_feature} ON CACHE INTERNAL "Required by the official Lua binding" FORCE)
+    set(${_feature} ON)
+endforeach()
+
 # Configure source dependencies as libraries only. In particular, enabling the
 # old in-Core Lua binding would create a second opentlv_lua target.
 set(OPENTLV_BUILD_CXX OFF)
@@ -70,20 +87,18 @@ if(NOT _core_config)
     message(FATAL_ERROR "Selected Core does not expose its public generated tlv/config.h.")
 endif()
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_core_config}")
-file(STRINGS "${_core_config}" _core_definitions REGEX "^#define OPENTLV_[A-Z_]+ [01]$")
-foreach(_feature IN ITEMS READER WRITER QUERY SCHEMA CODEC DOCUMENT
-        FORMAT_BER FORMAT_CER FORMAT_DER BLUETOOTH EMV NFC LLDP)
+file(STRINGS "${_core_config}" _core_definitions REGEX "^#define OPENTLV_[A-Z0-9_]+ [01]$")
+foreach(_feature IN LISTS _core_features)
     set(_definition "${_core_definitions}")
-    list(FILTER _definition INCLUDE REGEX "^#define OPENTLV_${_feature} [01]$")
+    list(FILTER _definition INCLUDE REGEX "^#define ${_feature} [01]$")
     list(LENGTH _definition _count)
     if(NOT _count EQUAL 1)
-        message(FATAL_ERROR "Selected Core config is missing a unique OPENTLV_${_feature} definition.")
+        message(FATAL_ERROR "Selected Core config is missing a unique ${_feature} definition.")
     endif()
-    string(REGEX REPLACE ".* ([01])$" "\\1" OPENTLV_LUA_CORE_${_feature} "${_definition}")
-endforeach()
-foreach(_required IN ITEMS READER WRITER QUERY SCHEMA CODEC)
-    if(NOT OPENTLV_LUA_CORE_${_required})
-        message(FATAL_ERROR "The existing Lua API requires Core capability OPENTLV_${_required}=ON.")
+    if(NOT _definition STREQUAL "#define ${_feature} 1")
+        message(FATAL_ERROR
+            "The official Lua binding requires ${_feature}=ON in the selected Core. "
+            "Select a full-featured Core package or build Core from source.")
     endif()
 endforeach()
 message(STATUS "Lua Core configuration: ${_core_config}")

@@ -82,9 +82,12 @@ preserving the existing Lua facade coverage and Core test ownership.
 
 ## Standalone build follow-up (#2)
 
-The standalone build pins the same Core commit as the source import. It adapts
-`CMakeLists.txt` and reads optional components from the selected Core's public
-generated configuration. See [development instructions](development.md).
+The standalone build pins the same Core commit as the source import. The
+original #2 integration adapted `CMakeLists.txt` and read optional components
+from the selected Core's public generated configuration. Issue #16 supersedes
+that selection policy: official builds now require every supported feature.
+The reduced-build results below remain historical migration evidence.
+See the current [development instructions](development.md#components-and-tests).
 
 Two headers used by the original Lua sources lived outside `bindings/lua/`.
 They are now retained locally, byte-for-byte from the same source commit:
