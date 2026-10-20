@@ -53,31 +53,15 @@ add_library(opentlv_lua MODULE
     src/visitor.c
     src/visitor.h
     src/compat.h
+    src/document.c
+    src/formats/ber.c
+    src/formats/cer.c
+    src/formats/der.c
+    src/formats/bluetooth_ltv.c
+    src/formats/emv.c
+    src/formats/nfc_type2.c
+    src/formats/lldp.c
 )
-if(OPENTLV_LUA_CORE_DOCUMENT)
-    target_sources(opentlv_lua PRIVATE src/document.c)
-endif()
-if(OPENTLV_LUA_CORE_FORMAT_BER)
-    target_sources(opentlv_lua PRIVATE src/formats/ber.c)
-endif()
-if(OPENTLV_LUA_CORE_FORMAT_CER)
-    target_sources(opentlv_lua PRIVATE src/formats/cer.c)
-endif()
-if(OPENTLV_LUA_CORE_FORMAT_DER)
-    target_sources(opentlv_lua PRIVATE src/formats/der.c)
-endif()
-if(OPENTLV_LUA_CORE_BLUETOOTH)
-    target_sources(opentlv_lua PRIVATE src/formats/bluetooth_ltv.c)
-endif()
-if(OPENTLV_LUA_CORE_EMV)
-    target_sources(opentlv_lua PRIVATE src/formats/emv.c)
-endif()
-if(OPENTLV_LUA_CORE_NFC)
-    target_sources(opentlv_lua PRIVATE src/formats/nfc_type2.c)
-endif()
-if(OPENTLV_LUA_CORE_LLDP)
-    target_sources(opentlv_lua PRIVATE src/formats/lldp.c)
-endif()
 
 target_include_directories(opentlv_lua PRIVATE ${LUA_INCLUDE_DIR})
 add_dependencies(opentlv_lua opentlv_lua_version)
@@ -209,17 +193,14 @@ if(OPENTLV_BUILD_LUA_TESTS)
     string(REPLACE ";" "\\;" _lua_cpath "${_lua_cpath}")
     set(_lua_test_environment "LUA_PATH=${_lua_path};LUA_CPATH=${_lua_cpath}")
 
-    # The existing suite exercises all original presets. Reduced builds use
-    # the configuration-aware smoke test below.
-    if(OPENTLV_BUSTED_EXECUTABLE AND OPENTLV_LUA_CORE_FORMAT_BER AND OPENTLV_LUA_CORE_FORMAT_CER
-       AND OPENTLV_LUA_CORE_FORMAT_DER AND OPENTLV_LUA_CORE_BLUETOOTH)
+    if(OPENTLV_BUSTED_EXECUTABLE)
         add_test(NAME Integration_lua
             COMMAND ${OPENTLV_BUSTED_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests")
         set_tests_properties(Integration_lua PROPERTIES
             LABELS "integration;lua"
             ENVIRONMENT "${_lua_test_environment}")
     else()
-        message(STATUS "busted or required presets unavailable; skipping the full Lua binding test suite.")
+        message(STATUS "busted unavailable; skipping the full Lua binding test suite.")
     endif()
 
     if(OPENTLV_LUA_EXECUTABLE)
@@ -270,10 +251,7 @@ if(OPENTLV_BUILD_LUA_TESTS)
             LABELS "integration;lua" ENVIRONMENT "${_lua_test_environment}")
         add_test(NAME Integration_lua_components
             COMMAND ${OPENTLV_LUA_EXECUTABLE}
-                "${CMAKE_CURRENT_SOURCE_DIR}/tests/components.lua"
-                $<BOOL:${OPENTLV_LUA_CORE_FORMAT_BER}> $<BOOL:${OPENTLV_LUA_CORE_FORMAT_CER}>
-                $<BOOL:${OPENTLV_LUA_CORE_FORMAT_DER}> $<BOOL:${OPENTLV_LUA_CORE_BLUETOOTH}>
-                $<BOOL:${OPENTLV_LUA_CORE_LLDP}> $<BOOL:${OPENTLV_LUA_CORE_EMV}> $<BOOL:${OPENTLV_LUA_CORE_NFC}> $<BOOL:${OPENTLV_LUA_CORE_DOCUMENT}>)
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/components.lua")
         set_tests_properties(Integration_lua_components PROPERTIES
             LABELS "integration;lua"
             ENVIRONMENT "${_lua_test_environment}")
@@ -282,15 +260,11 @@ if(OPENTLV_BUILD_LUA_TESTS)
         set_tests_properties(Integration_example_lua_quick_start PROPERTIES
             LABELS "integration;examples;lua" ENVIRONMENT "${_lua_test_environment}"
             PASS_REGULAR_EXPRESSION "Hello, world!")
-        if(OPENTLV_LUA_CORE_FORMAT_BER)
-            foreach(example parse)
-                add_test(NAME Integration_example_lua_${example}
-                    COMMAND ${OPENTLV_LUA_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/examples/${example}.lua")
-                set_tests_properties(Integration_example_lua_${example} PROPERTIES
-                    LABELS "integration;examples;lua"
-                    ENVIRONMENT "${_lua_test_environment}")
-            endforeach()
-        endif()
+        add_test(NAME Integration_example_lua_parse
+            COMMAND ${OPENTLV_LUA_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/examples/parse.lua")
+        set_tests_properties(Integration_example_lua_parse PROPERTIES
+            LABELS "integration;examples;lua"
+            ENVIRONMENT "${_lua_test_environment}")
     else()
         message(STATUS "lua interpreter not found; skipping the Lua binding examples.")
     endif()

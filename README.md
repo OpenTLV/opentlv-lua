@@ -38,7 +38,11 @@ Core revision automatically. The binding links only `OpenTLV::tlv` and requires
 no C++ compiler. The workspace is optional.
 
 See [development instructions](docs/development.md) for package selection,
-Lua discovery, module loading, component configuration, and test prerequisites.
+Lua discovery, module loading, Core requirements, and test prerequisites.
+
+Official Lua packages include all stable Core functionality supported by the
+binding. Individual Core modules cannot be disabled through Lua CMake options.
+Custom source modifications are possible but are not official release configurations.
 
 ## LuaRocks
 

@@ -26,6 +26,7 @@ def check(build, lua, include, core):
     run(*base, '-B', consumer, '-DOPENTLV_LUA_CORE_PACKAGE=' + package)
     run('cmake', '--build', consumer, '--target', 'opentlv_lua', '--config', 'Release', '--parallel', '2')
     run(lua, ROOT / 'tests/smoke.lua', env=lua_environment(consumer))
+    run(lua, ROOT / 'tests/components.lua', env=lua_environment(consumer))
     for name, args, message in (
         ('missing', ['-DOPENTLV_LUA_CORE_PACKAGE=' + str(build / 'does-not-exist')], 'Explicit Core package'),
         ('conflict', ['-DOPENTLV_LUA_CORE_PACKAGE=' + package, '-DFETCHCONTENT_SOURCE_DIR_OPENTLV_CORE=' + str(core)],

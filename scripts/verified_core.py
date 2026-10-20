@@ -12,6 +12,7 @@ from ci_support import ROOT, api, compiler, digest, pin, read, require, run, wri
 
 REPOSITORY = 'OpenTLV/opentlv'
 SIGNER = REPOSITORY + '/.github/workflows/core-release.yml'
+REQUIRED_FEATURES = tuple(read(ROOT / 'cmake/core-features.json'))
 
 
 def lock(require_release=False):
@@ -136,7 +137,7 @@ def compatible(record, probe, shared, configuration):
             record.get('compiler', {}).get('CMAKE_C_COMPILER_VERSION') == probe['COMPILER_VERSION'] and
             (record.get('msvc_runtime') == 'MultiThreadedDLL' if system == 'windows' else
              record.get('libc') == list(platform.libc_ver())) and
-            record.get('options', {}).get('OPENTLV_READER') == 'ON')
+            all(record.get('options', {}).get(feature) == 'ON' for feature in REQUIRED_FEATURES))
 
 
 def authenticated_release(work, selected):

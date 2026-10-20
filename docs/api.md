@@ -420,10 +420,10 @@ representation; required fields must be supplied on encode.
 | `lldp.organisation` | `{oui, subtype, payload}`; `oui` is exactly three bytes |
 | `emv.amount` | Unsigned integer in unscaled minor units |
 
-ASN.1 exports require `OPENTLV_FORMAT_BER`; they preserve C's canonical
-content checks even when the caller reads permissive BER. Protocol-specific
-Bluetooth, LLDP and EMV exports follow their component options. C source
-aliases remain available even with optional components disabled.
+Official Lua packages include the ASN.1, Bluetooth, LLDP and EMV exports.
+ASN.1 codecs preserve C's canonical content checks even when the caller reads
+permissive BER. Individual Core modules cannot be disabled through Lua build
+options; see the [build policy](development.md#components-and-tests).
 
 ### EMV dictionary selection
 

@@ -15,7 +15,7 @@ import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from ci_support import digest
-from verified_core import checksums, compatible, extract, resolve, verify_manifest
+from verified_core import REQUIRED_FEATURES, checksums, compatible, extract, resolve, verify_manifest
 
 LOCK = {'schema': 1, 'repository': 'OpenTLV/opentlv', 'commit': 'b' * 40,
         'release_tag': 'v0.8.0', 'allow_verified_source': True}
@@ -87,7 +87,7 @@ class CoreConsumer(unittest.TestCase):
         record = {'id': 'linux-x64-shared', 'architecture': 'x64', 'os': 'linux',
                   'build_type': 'Release', 'linkage': 'shared',
                   'compiler': {'CMAKE_C_COMPILER_ID': 'GNU', 'CMAKE_C_COMPILER_VERSION': '13.3.0'},
-                  'libc': ['glibc', '2.39'], 'options': {'OPENTLV_READER': 'ON'}}
+                  'libc': ['glibc', '2.39'], 'options': dict.fromkeys(REQUIRED_FEATURES, 'ON')}
         with patch('verified_core.platform.system', return_value='Linux'), \
                 patch('verified_core.platform.machine', return_value='x86_64'), \
                 patch('verified_core.platform.libc_ver', return_value=('glibc', '2.39')):
@@ -96,6 +96,15 @@ class CoreConsumer(unittest.TestCase):
             self.assertFalse(compatible(record, probe, 'ON', 'Debug'))
             self.assertFalse(compatible(record, probe | {'COMPILER_ID': 'Clang'}, 'ON', 'Release'))
             self.assertFalse(compatible(record | {'libc': ['glibc', '2.31']}, probe, 'ON', 'Release'))
+            for feature in REQUIRED_FEATURES:
+                for value in ('OFF', None):
+                    options = record['options'].copy()
+                    if value is None:
+                        del options[feature]
+                    else:
+                        options[feature] = value
+                    with self.subTest(feature=feature, value=value):
+                        self.assertFalse(compatible(record | {'options': options}, probe, 'ON', 'Release'))
 
     def test_attestation_failure_never_becomes_source_fallback(self):
         with tempfile.TemporaryDirectory() as tmp, patch('verified_core.lock', return_value=LOCK), \
@@ -209,7 +218,7 @@ class CoreConsumer(unittest.TestCase):
         record = {'id': 'linux-x64-static', 'architecture': 'x64', 'os': 'linux',
                   'build_type': 'Release', 'linkage': 'static',
                   'compiler': {'CMAKE_C_COMPILER_ID': 'GNU', 'CMAKE_C_COMPILER_VERSION': '13.3.0'},
-                  'libc': ['glibc', '2.39'], 'options': {'OPENTLV_READER': 'ON'}}
+                  'libc': ['glibc', '2.39'], 'options': dict.fromkeys(REQUIRED_FEATURES, 'ON')}
         with patch('verified_core.platform.system', return_value='Linux'), \
                 patch('verified_core.platform.machine', return_value='x86_64'), \
                 patch('verified_core.platform.libc_ver', return_value=('glibc', '2.39')):
