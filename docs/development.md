@@ -73,8 +73,10 @@ its public `tlv/config.h` is rejected.
 An installed static Core must already have been compiled with PIC on platforms
 that require it for shared modules. Setting PIC on the Lua build cannot repair
 an existing static archive. Shared Core packages are also supported: Windows
-builds copy the Core DLL beside `_core.dll`; on Linux/macOS, keep the selected
-Core shared library available to the system loader when deploying the module.
+builds copy the Core DLL beside `_core.dll`; add that directory to `PATH` when
+loading the module (CTest and the CI runner do this automatically). On Linux/macOS,
+keep the selected Core shared library available to the system loader when deploying
+the module.
 
 ## Pinned remote Core
 

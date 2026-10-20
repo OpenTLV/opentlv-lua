@@ -81,6 +81,23 @@ jobs:
         if: runner.os != 'Windows'
         uses: leafo/gh-actions-luarocks@v4
 
+      - name: Run LuaRocks with PUC Lua for LuaJIT
+        if: matrix.lua == 'luajit'
+        shell: bash
+        run: |
+          # LuaJIT cannot compile the public manifest (>65536 constants).
+          # Change only the package manager's interpreter; its configured Lua
+          # executable, headers and generated Busted launcher remain LuaJIT.
+          sudo apt-get install -y lua5.1
+          python - <<'PY'
+          from pathlib import Path
+          launcher = Path('.luarocks/bin/luarocks')
+          first, body = launcher.read_text().split('\n', 1)
+          assert first.startswith('#!'), 'Expected a LuaRocks interpreter shebang'
+          launcher.write_text('#!/usr/bin/lua5.1\n' + body)
+          PY
+          test "$(luarocks config variables.LUA)" = "$GITHUB_WORKSPACE/.lua/bin/luajit"
+
       # gh-actions-luarocks invokes POSIX configure/make, including on Windows.
       - name: Set up LuaRocks on Windows
         if: runner.os == 'Windows'

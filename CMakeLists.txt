@@ -294,4 +294,13 @@ if(OPENTLV_BUILD_LUA_TESTS)
     else()
         message(STATUS "lua interpreter not found; skipping the Lua binding examples.")
     endif()
+    if(WIN32 AND _core_type STREQUAL "SHARED_LIBRARY")
+        # Lua uses LoadLibraryEx without LOAD_WITH_ALTERED_SEARCH_PATH, so
+        # staging tlv.dll beside _core.dll alone does not make it discoverable.
+        get_property(_lua_tests DIRECTORY PROPERTY TESTS)
+        if(_lua_tests)
+            set_tests_properties(${_lua_tests} PROPERTIES ENVIRONMENT_MODIFICATION
+                "PATH=path_list_prepend:$<TARGET_FILE_DIR:opentlv_lua>")
+        endif()
+    endif()
 endif()
