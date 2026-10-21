@@ -161,10 +161,14 @@ class Release(unittest.TestCase):
                         for name in ('Full / checks / Lua quality gate', 'Assemble and attest Lua release')]
                 with patch.dict(os.environ, {'FULL_CI_RESULT': 'success', 'ASSEMBLE_RESULT': 'success'}), \
                         patch.object(release, 'attempt_jobs', return_value=jobs), \
-                        patch.object(release, 'api', return_value={'object': {'sha': request['commit']}}) as api:
+                        patch.object(release, 'ROOT', root), \
+                        patch.object(release, 'api', side_effect=[{'object': {'sha': request['commit']}},
+                            {'id': 456, 'tag_name': 'v0.2.0', 'draft': False, 'prerelease': False,
+                             'published_at': '2026-10-21T12:00:00Z'}]) as api:
                     release.publish(root / 'release')
-                    api.assert_called_once_with(release.REPOSITORY + '/git/refs',
-                                                {'ref': 'refs/tags/v0.2.0', 'sha': request['commit']})
+                    api.assert_any_call(release.REPOSITORY + '/git/refs',
+                                        {'ref': 'refs/tags/v0.2.0', 'sha': request['commit']})
+                    self.assertTrue((root / 'build/docs-release/release.json').is_file())
                     self.assertEqual(command.call_args.args[:3], ('gh', 'release', 'create'))
 
     def test_incomplete_same_attempt_jobs_never_publish(self):
