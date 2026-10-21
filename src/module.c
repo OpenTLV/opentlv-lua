@@ -37,12 +37,12 @@
 #include "schema.h"
 #include "visitor.h"
 #include "writer.h"
+#include "lua-version.h"
 
 #include <tlv/result.h>
-#include <tlv/version.h>
 
 static int l_version(lua_State* L) {
-    lua_pushstring(L, tlv_version_string());
+    lua_pushliteral(L, OPENTLV_LUA_VERSION);
     return 1;
 }
 
@@ -75,10 +75,8 @@ int luaopen_opentlv__core(lua_State* L) {
     lua_pushcfunction(L, l_strerror);
     lua_setfield(L, module_index, "strerror");
 
-    /* Reports the linked C library's version, independent of this binding's
-     * own rockspec version, the same distinction docs/development/python.md
-     * documents for opentlv.__version__. */
-    lua_pushstring(L, tlv_version_string());
+    /* Both public version forms share the binding's package metadata source. */
+    lua_pushliteral(L, OPENTLV_LUA_VERSION);
     lua_setfield(L, module_index, "_VERSION");
 
     return 1;

@@ -97,6 +97,7 @@ def execute(args, evidence):
     evidence['stage'] = 'Lua tests'
     if args.smoke:
         run([lua, ROOT / 'tests/smoke.lua'], env=env)
+        run([lua, ROOT / 'tests/version.lua', build / 'lua-version.json'], env=env)
         evidence['smoke'] = True
     else:
         listing = run(['ctest', '--test-dir', build, '-C', args.configuration, '--show-only=json-v1'],

@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Report the independent Lua binding version through `version()` and `_VERSION`, using the same generated value as package/release metadata, with Lua checks for build and installed package consistency. Core identity remains in build/release provenance only. (#18)
 - Require all stable Core features supported by Lua in every official build, remove Core feature selection, reject incomplete Core packages, and align component checks and documentation with the single full-featured configuration. (#16)
 
 ### Fixed

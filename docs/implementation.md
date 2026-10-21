@@ -42,7 +42,9 @@ requirement on Windows. For installation with LuaRocks, follow the
 ## Versioning
 
 Lua binding releases are versioned independently of Core. The existing
-`opentlv.version()` and `opentlv._VERSION` report the linked Core version.
+`opentlv.version()` and `opentlv._VERSION` report the Lua binding version from
+the same generated value as `lua-version.json`. Core identity is build/release
+metadata and is not exposed through the Lua API.
 See [Lua versioning](versioning.md).
 
 ## Continuous integration

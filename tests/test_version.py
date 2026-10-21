@@ -43,7 +43,17 @@ class VersionTests(unittest.TestCase):
             self.assertIn("Multiple Lua release tags", result.stderr)
             return
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        return json.loads((self.root / "output/lua-version.json").read_text(encoding="utf-8"))
+        metadata = json.loads((self.root / "output/lua-version.json").read_text(encoding="utf-8"))
+        header = (self.root / "output/generated/lua-version.h").read_text(encoding="utf-8")
+        self.assertIn('#define OPENTLV_LUA_VERSION "' + metadata["binding_version"] + '"', header)
+        return metadata
+
+    def test_unchanged_version_preserves_header_timestamp(self):
+        self.metadata()
+        header = self.root / "output/generated/lua-version.h"
+        before = header.stat().st_mtime_ns
+        self.metadata()
+        self.assertEqual(header.stat().st_mtime_ns, before)
 
     def test_untagged_and_unrelated_tag(self):
         for tag in ("core-baseline", "0.1.0", "v01.2.3", "v1.02.3", "v1.2.03",

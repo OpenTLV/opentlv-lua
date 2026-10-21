@@ -11,6 +11,7 @@ add_custom_target(opentlv_lua_version
     COMMAND "${CMAKE_COMMAND}" "-DLUA_SOURCE=${LUA_SOURCE}" "-DLUA_BINARY=${LUA_BINARY}"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateVersion.cmake"
     BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/lua-version.json"
+        "${CMAKE_CURRENT_BINARY_DIR}/generated/lua-version.h"
     VERBATIM)
 
 include(cmake/Core.cmake)
@@ -63,7 +64,8 @@ add_library(opentlv_lua MODULE
     src/formats/lldp.c
 )
 
-target_include_directories(opentlv_lua PRIVATE ${LUA_INCLUDE_DIR})
+target_include_directories(opentlv_lua PRIVATE ${LUA_INCLUDE_DIR}
+    "${CMAKE_CURRENT_BINARY_DIR}/generated")
 add_dependencies(opentlv_lua opentlv_lua_version)
 target_link_libraries(opentlv_lua PRIVATE OpenTLV::tlv)
 target_compile_features(opentlv_lua PRIVATE c_std_99)
@@ -204,6 +206,11 @@ if(OPENTLV_BUILD_LUA_TESTS)
     endif()
 
     if(OPENTLV_LUA_EXECUTABLE)
+        add_test(NAME Integration_lua_version
+            COMMAND ${OPENTLV_LUA_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests/version.lua"
+                "${CMAKE_CURRENT_BINARY_DIR}/lua-version.json")
+        set_tests_properties(Integration_lua_version PROPERTIES
+            LABELS "integration;lua" ENVIRONMENT "${_lua_test_environment}")
         add_test(NAME Integration_lua_query_document
             COMMAND ${OPENTLV_LUA_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests/query_document_spec.lua")
         add_test(NAME Integration_lua_query_document_allocator

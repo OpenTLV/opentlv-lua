@@ -1,0 +1,9 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Marek Cingel
+
+#ifndef OPENTLV_LUA_VERSION_H
+#define OPENTLV_LUA_VERSION_H
+
+#define OPENTLV_LUA_VERSION "@_version@"
+
+#endif

@@ -54,7 +54,8 @@ its recorded hashes.
 - Lua 5.1â€“5.4 and LuaJIT compatibility helpers are unchanged.
 - Optional Core component integration and platform-specific linking logic are
   retained in their original sources and build metadata.
-- `version()` and `_VERSION` continue to report the linked Core version.
+- At migration, `version()` and `_VERSION` reported the linked Core version.
+  Since #18 they report the independent Lua binding version; see [versioning](versioning.md).
 
 ## Verification and remaining validation
 
@@ -155,7 +156,7 @@ revision `d87dcf96b2707e817dd51163a9f9efa36651e929` recorded above. The original
 created no tag by itself. The current [release quality gate](releases.md)
 supersedes that workflow with PR/Main/Full/Release separation and verified
 module artifacts. See [versioning](versioning.md) for the distinction between
-Lua versions, LuaRocks revisions and the Core version reported by the API.
+Lua versions, LuaRocks revisions and Core build/release provenance.
 
 ## Documentation ownership follow-up (opentlv-docs#27)
 

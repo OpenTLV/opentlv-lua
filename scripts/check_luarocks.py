@@ -67,8 +67,9 @@ def main():
              'assert(m == require("opentlv._core")); '
              'assert(type(m.version()) == "string" and #m.version() > 0); '
              'assert(m.version() == m._VERSION); '
-             'print("Installed module Core version: " .. m.version())'],
+             'print("Installed module Lua binding version: " .. m.version())'],
             cwd=directory, env=env)
+        run([lua, ROOT / "tests/version.lua", metadata[0]], cwd=directory, env=env)
         run([lua, ROOT / "examples/quick_start.lua"], cwd=directory, env=env)
 
 
