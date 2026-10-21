@@ -28,7 +28,8 @@ Preflight locks the dispatch commit, Core release ID and authenticated manifest
 digest. Release calls Full CI in the same run: all 17 configurations, LuaRocks,
 sanitizers, static checks and CodeQL are required. Candidate workers create a
 private local tag so packaged metadata contains the intended release version;
-no remote tag exists yet. `opentlv.version()` still reports Core's version.
+no remote tag exists yet. `opentlv.version()` and `opentlv._VERSION` report the
+same binding version as the packaged `lua-version.json`, without the tag's `v`.
 
 Always-running aggregate validation rejects missing, failed, cancelled,
 duplicate or skipped required evidence. The assembler revalidates the original

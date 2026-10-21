@@ -7,8 +7,10 @@ The package remains named `opentlv`; `scm-1` remains its development rockspec.
 
 ## Version metadata
 
-CMake writes `lua-version.json` in the build directory at configuration time
-and refreshes it whenever `opentlv_lua` is built. The rock copies that file into
+CMake generates `lua-version.json` and a private C version header from the same
+version value at configuration time and refreshes both whenever `opentlv_lua`
+is built. A version change recompiles the module, keeping its public API and
+packaged metadata consistent without a second version constant. The rock copies the JSON file into
 its versioned LuaRocks directory, normally
 `<tree>/lib/luarocks/rocks-<lua-abi>/opentlv/scm-1/lua-version.json`.
 
@@ -36,10 +38,13 @@ establish archive provenance. A shallow checkout only knows tags actually
 fetched; fetch the intended release tag to identify a release. CI checks out
 the full history and tags.
 
-This metadata does not add or rename Lua API fields. `opentlv.version()` and
-`opentlv._VERSION` still call `tlv_version_string()` and identify the linked
-Core library. The Core dependency SHA is recorded separately in
-`cmake/Core.cmake`; it is not a binding version.
+`opentlv.version()` and `opentlv._VERSION` both return `binding_version`,
+including the development/dirty/archive forms above. This changes their former
+Core-version semantics without renaming either API. No Lua API exposes the Core
+version or commit SHA. The pinned Core dependency SHA remains in
+`cmake/Core.cmake`; CI records the selected dependency in its build evidence and
+module archives retain it in `build-identity.json`. Release manifests retain
+the verified Core identity separately from the binding version.
 
 ## First standalone release baseline
 
@@ -73,7 +78,11 @@ source = {
 ```
 
 Its filename is `opentlv-0.1.0-1.rockspec`. The final `-1` is the LuaRocks
-packaging revision, not part of the Git tag or Core version. Keep the existing
+packaging revision, not part of the Git tag or the public Lua binding version.
+Thus `opentlv-0.1.0-1.rockspec` built from clean tag `v0.1.0` reports `0.1.0`
+through both Lua APIs and `lua-version.json`. The development rock's `scm-1`
+identifies its rolling package channel; its exact build version is in the API
+and JSON metadata. Keep the existing
 build/install commands; the development rockspec stays `scm-1`. Validate the
 release checkout and installed modules before publication. The quality gate publishes validated module archives and a GitHub Release. It
 does not create a versioned release rockspec or publish to LuaRocks.

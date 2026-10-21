@@ -12,7 +12,7 @@ import zipfile
 
 from ci_support import ROOT, digest, read, require, write
 
-PACKAGE_TESTS = ('smoke.lua', 'codec_spec.lua', 'query_document_spec.lua',
+PACKAGE_TESTS = ('smoke.lua', 'version.lua', 'codec_spec.lua', 'query_document_spec.lua',
                  'schema_spec.lua', 'writer_spec.lua', 'visitor_spec.lua', 'program_spec.lua')
 
 
@@ -52,7 +52,10 @@ def package(build, lua, core, identifier, evidence, release):
         env['LUA_PATH'] = str(extracted / '?/init.lua')
         env['LUA_CPATH'] = str(extracted / ('?' + suffix))
         for test in PACKAGE_TESTS:
-            subprocess.run([str(lua), str(ROOT / 'tests' / test)], cwd=extracted, env=env, check=True)
+            command = [str(lua), str(ROOT / 'tests' / test)]
+            if test == 'version.lua':
+                command.append(str(extracted / 'lua-version.json'))
+            subprocess.run(command, cwd=extracted, env=env, check=True)
         subprocess.run([str(lua), str(build / 'lua-query-conformance.lua')], cwd=extracted, env=env, check=True)
     return {'id': identifier, 'filename': archive.name, 'sha256': digest(archive),
             'tests': list(PACKAGE_TESTS), 'query': True, 'metadata': metadata}

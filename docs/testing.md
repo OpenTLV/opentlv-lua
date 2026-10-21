@@ -36,6 +36,7 @@ platforms, Linux LuaJIT, shared Core, installed-package consumption and sanitize
 | Tests | Lua-owned behavior |
 | --- | --- |
 | `module_spec.lua`, `reader_spec.lua`, `format_spec.lua`, `error_spec.lua` | Public API, module identity, argument conversion and diagnostic tables |
+| `version.lua` | Both public version forms match generated/installed binding metadata; run by CTest, Main smoke, LuaRocks and extracted package checks |
 | `codec_spec.lua`, `schema_spec.lua`, `writer_spec.lua`, `visitor_spec.lua` | Conversion, callbacks, retained inputs, ownership, GC and error propagation |
 | `program_spec.lua`, `query_document_spec.lua` | Query/Document userdata, continuations, finalizers, mutation and lifetime |
 | `failing_allocator.c` | Native helper for Lua allocation failure injection; no Core engine tests |
@@ -125,7 +126,7 @@ matrix still needs a hosted run after publication; no hosted result is claimed.
 
 LuaRocks 3.11.1 installed both modules and matching version metadata into fresh
 temporary trees with spaces in their paths. Loading took place outside the
-checkout using only installed module paths; module identity, existing Core
+checkout using only installed module paths; module identity, then-existing Core
 version reporting (`0.7.1`), and the quick-start example passed in each run:
 
 | Environment | Lua | Core selection | Result |

@@ -59,7 +59,7 @@ The LuaRocks tree must be on Lua's search paths. See the
 isolated tree, Windows requirements, and explicit Core selection.
 The rock installs both modules and Lua binding version metadata. Lua release
 tags are independent of Core; `opentlv.version()` and `opentlv._VERSION`
-continue to report Core. See [versioning](docs/versioning.md).
+report the Lua binding version from that same metadata. See [versioning](docs/versioning.md).
 
 The [quality gates](docs/quality-gates.md) separate PR, Main, Full and Release
 verification. Full covers Lua 5.1–5.4 on Linux/Windows/macOS, Linux LuaJIT,

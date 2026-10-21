@@ -23,8 +23,12 @@ Core no longer builds or installs the Lua module.
 ```lua
 local opentlv = require("opentlv")
 
-print(opentlv.version())
+print(opentlv.version()) -- Lua binding version, e.g. "0.1.0" for tag v0.1.0
 ```
+
+`opentlv._VERSION` contains the same binding version. Development builds have
+an explicit `scm` or dirty identity; see [versioning](versioning.md). Core's
+version and commit SHA are not exposed through the Lua API.
 
 Runnable version:
 [quick_start.lua](../examples/quick_start.lua)

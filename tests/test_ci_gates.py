@@ -29,7 +29,8 @@ def records():
                  runtime='LuaJIT 2.1' if row['lua'] == 'luajit' else 'Lua ' + row['lua'],
                  requested_runtime=row['lua'], shared=row['shared'], sanitizer=row['sanitizer'],
                  configuration=row['configuration'], tests=sorted(EXPECTED_TESTS),
-                 ctest_passed=15, ctest_total=15, busted_passed=78, busted_failed=0, busted_errors=0,
+                 ctest_passed=len(EXPECTED_TESTS), ctest_total=len(EXPECTED_TESTS),
+                 busted_passed=79, busted_failed=0, busted_errors=0,
                  busted_pending=0, query_fixtures=171, query_checks=3422, luarocks=row['rocks'],
                  dependency_checks=policy.SCENARIOS if row['package'] else [],
                  package={'id': row['package']} if row['package'] else None)

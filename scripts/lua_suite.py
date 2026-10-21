@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CORE_REPOSITORY = "https://github.com/OpenTLV/opentlv.git"
 EXPECTED_TESTS = {
     "Integration_lua",
+    "Integration_lua_version",
     "Integration_lua_query_document",
     "Integration_lua_query_document_allocator",
     "Integration_lua_codec",

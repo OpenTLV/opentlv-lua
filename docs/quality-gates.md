@@ -94,7 +94,8 @@ builds, toolchains, libc or operating system versions.
 Each archive includes `opentlv/_core`, `opentlv/init.lua`, binding version
 metadata, compiler/dependency identity and original Lua/Core licenses. After
 extraction into a separate temporary tree, the runner loads only its module
-paths and runs seven Lua test scripts plus the complete Query facade corpus.
+paths and runs eight Lua test scripts, including public version/metadata
+consistency, plus the complete Query facade corpus.
 Native allocator injection remains in the build suite; the helper is not
 distributed. Shared Core configurations are tested separately.
 
