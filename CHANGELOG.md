@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Notify Docs after successful Main CI when Lua documentation or examples change, using attempt-bound evidence and a separate dispatch workflow. (OpenTLV/opentlv-docs#42)
 - Notify Docs after verified GitHub releases using exact release, commit and workflow-attempt evidence. (OpenTLV/opentlv-docs#42)
 - Align Lua PR, Main, Full and Release gates with runtime and sanitizer coverage, verified Core dependencies, validated module packages and CI timing evidence. (#13)
 - Own the migrated Lua API guide and implementation notes, link standalone build/test instructions and preserve the initial README as a historical provenance artifact. (OpenTLV/opentlv-docs#27)

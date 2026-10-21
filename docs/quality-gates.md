@@ -11,13 +11,43 @@ or enables its native tests.
 | Entry point | Trigger | Required checks |
 | --- | --- | --- |
 | `lua-pr.yml` | PR to `main` | Linux Lua 5.4 Debug, all Lua tests and Query facade corpus, formatting, clang-tidy, cppcheck, Python tooling regressions, Lua syntax and CodeQL |
-| `lua-main.yml` | Push to `main` | One Linux Lua 5.4 build; module identity, version and public Reader smoke |
+| `lua-main.yml` | Push to `main` | One Linux Lua 5.4 build; module identity, version and public Reader smoke; documentation change evidence after the gate |
 | `lua-full.yml` | Manual dispatch or Release call | Complete runtime/platform matrix, shared Core, LuaRocks, installed Core consumption, module packages, ASan/UBSan and all source checks |
 | `release.yml` | Manual dispatch from `main`, only `tag` | Closed changelog, dispatch SHA, locked authenticated Core release, fresh Full CI, checksummed and attested packages, Git tag and GitHub Release |
 
 PR has no path filters or branch-push trigger. Full has no push or schedule
 trigger. Main does not repeat the runtime matrix or source analysis. Standalone
 Full never publishes. Historical PR results cannot authorize a release.
+
+## Documentation pin notifications
+
+After the Main quality gate succeeds, `docs_changes` compares the push commit
+with the previous successful Main run. Changes in `docs/`, `examples/`, root
+README, CONTRIBUTING or CHANGELOG files, or the Main notification infrastructure
+produce a positive change record. Comparing against the previous success also
+covers documentation changes from cancelled or failed pushes. The first run
+without a successful baseline examines the complete tracked source tree.
+
+Main uploads `docs-notification-<attempt>/notification.json` with the exact
+repository, commit, run, attempt and change flag. The separate **Notify Lua
+documentation portal** workflow runs only after successful Main push completion.
+It validates that record and sends `component-docs-updated` to Docs only when
+relevant files changed. Unrelated changes need no dispatch credential.
+
+The notifier performs no checkout and executes no producer artifact code. Only
+its final inline step receives `OPENTLV_DOCS_DISPATCH_TOKEN`, a fine-grained token
+restricted to Docs with Contents write permission. Main uses its read-only
+workflow token. Missing credentials or delivery errors fail visibly; rerun the
+notifier while its exact-attempt artifact remains available.
+
+Merge the Docs Lua `updates.mode: documentation` policy before enabling this
+sender. Docs authenticates the successful Main run and main ancestry, then opens
+or updates `automation/component-lua` with only Lua's source revision changed.
+Duplicate or older notifications do not regress the pin. The proposed revision
+still passes Docs PR checks. This flow does not start Docs Full, publish Pages,
+or claim runtime compatibility with the portal's Core pin. Versioned release
+documentation remains owned by the separate release notifier described in
+[the release guide](releases.md).
 
 The Full matrix has 17 configurations:
 

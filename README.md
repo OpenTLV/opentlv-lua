@@ -86,6 +86,10 @@ historical Core layout, not the standalone build.
 
 ## Repository layout
 
+Successful Main CI proposes a Docs source-pin update when Lua manuals or examples
+change. See [documentation pin notifications](docs/quality-gates.md#documentation-pin-notifications)
+for credentials, retries and the separate versioned release publication flow.
+
 | Path | Contents |
 | --- | --- |
 | `src/` | Native C binding, module registration, and Lua compatibility helpers |

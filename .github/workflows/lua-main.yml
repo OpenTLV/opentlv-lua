@@ -11,6 +11,27 @@ concurrency:
   group: lua-main-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  docs_changes:
+    needs: [gate]
+    if: github.repository == 'OpenTLV/opentlv-lua'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Record relevant changes since the previous successful Main run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python -B scripts/docs_notification.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docs-notification-${{ github.run_attempt }}
+          path: build/docs-notification/notification.json
+          if-no-files-found: error
   smoke:
     runs-on: ubuntu-24.04
     steps:
@@ -54,7 +75,7 @@ jobs:
   timings:
     name: Lua main timings
     if: always()
-    needs: [gate]
+    needs: [gate, docs_changes]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
