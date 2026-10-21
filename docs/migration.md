@@ -1,5 +1,11 @@
 # Lua source migration
 
+This page records the source import and subsequent migration steps. Their
+original inventories and validation results remain historical evidence. Use the
+[development guide](development.md) for current setup and
+[release guide](releases.md#automatic-release-documentation) for independently
+versioned Lua documentation.
+
 ## Provenance
 
 | Field | Value |
@@ -164,8 +170,11 @@ The [API guide](api.md) and [implementation notes](implementation.md) were
 moved from Core commit `56b95a6754b4bd7210cc63252885db2c919f7178`
 (`docs/guides/lua.md` and `docs/development/lua.md`). API descriptions and
 examples are preserved; links and setup now use the standalone repository.
-The portal assembles these sources with the build, testing and versioning guides.
-Its documentation versions continue to follow Core, independently of Lua tags.
+The portal assembled these sources with the build, testing and versioning guides.
+At that migration stage, documentation versions followed Core independently of
+Lua tags. The current [release documentation flow](releases.md#automatic-release-documentation)
+publishes independent Lua manuals under `lua/<version>/`, with their own catalog
+and stable alias. Portal assembly does not transfer ownership of the Lua guides.
 
 The original README now resides at
 [provenance/original-readme.md](../provenance/original-readme.md), outside the
