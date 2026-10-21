@@ -132,6 +132,15 @@ def publish(directory):
     require(created.get('object', {}).get('sha') == request['commit'], 'Unexpected created tag')
     run('gh', 'release', 'create', request['tag'], '--repo', REPOSITORY, '--verify-tag',
         '--title', 'OpenTLV Lua ' + request['version'], '--generate-notes', *sorted(directory.iterdir()))
+    released = api(REPOSITORY + '/releases/tags/' + request['tag'])
+    require(released.get('tag_name') == request['tag'] and released.get('draft') is False and
+            released.get('prerelease') is False and bool(released.get('published_at')) and
+            type(released.get('id')) is int and released['id'] > 0, 'GitHub release was not published')
+    write(ROOT / 'build/docs-release/release.json', {
+        'schema': 1, 'kind': 'component-release', 'status': 'published', 'source': 'lua',
+        'repository': REPOSITORY, 'commit': request['commit'], 'workflow_commit': request['workflow_sha'],
+        'tag': request['tag'], 'version': request['version'], 'run_id': int(request['run_id']),
+        'run_attempt': int(request['run_attempt']), 'release_id': released['id']})
 
 
 def main():

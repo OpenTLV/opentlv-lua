@@ -78,6 +78,7 @@ jobs:
           path: build/release/*
           if-no-files-found: error
   publish:
+    name: Publish verified Lua release
     needs: [full-ci, assemble]
     runs-on: ubuntu-24.04
     permissions:
@@ -98,6 +99,11 @@ jobs:
           FULL_CI_RESULT: ${{ needs.full-ci.result }}
           ASSEMBLE_RESULT: ${{ needs.assemble.result }}
         run: python -B scripts/release.py publish
+      - uses: actions/upload-artifact@v4
+        with:
+          name: component-release-${{ github.run_attempt }}
+          path: build/docs-release/release.json
+          if-no-files-found: error
 
   timings:
     name: Lua release timings
