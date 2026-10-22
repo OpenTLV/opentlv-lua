@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Correct the `LICENSE` copyright holder from the OpenTLV organization, inherited from the GitHub template, to Marek Cingel, matching the source headers and the Core license; packages built from this revision carry the corrected `LICENSE-Lua`. (#23)
 - Distinguish migration-era Core-aligned documentation from current independently versioned Lua manuals, while preserving source provenance and historical validation. (#21)
 - Make shared Core DLLs discoverable by Windows Lua tests and run the LuaRocks package manager under PUC Lua for LuaJIT to avoid oversized-manifest failures. (#13)
 - Use `v`-prefixed Lua release tags while accepting an unprefixed semantic version, preserving release quality gates and reporting the semantic binding version separately from the full Git tag. (#11)
