@@ -39,6 +39,7 @@ platforms, Linux LuaJIT, shared Core, installed-package consumption and sanitize
 | `compose_spec.lua` | Composed and packed Formats, Format operations, packed bit fields, configuration snapshots and retained lifetimes |
 | `stream_spec.lua` | Incremental Reader and Tree Reader input, Sources and preservation, resumable visits, events, subtree skipping, raw copies and measurement, with allocation failure injection |
 | `document_query_schema_spec.lua` | Document revisions, identity-checked Nodes, source locations, visits and builders; canonical paths, buffer visits, native plans, codec providers and Document result visits; checked, first-failure and length schemas and value constraints, with allocation failure injection |
+| `codec_generator_spec.lua` | Schema-number codecs, structure codec validation, callbacks and lifetimes, and reproducible wire generation, with allocation failure injection |
 | `version.lua` | Both public version forms match generated/installed binding metadata; run by CTest, Main smoke, LuaRocks and extracted package checks |
 | `codec_spec.lua`, `schema_spec.lua`, `writer_spec.lua`, `visitor_spec.lua` | Conversion, callbacks, retained inputs, ownership, GC and error propagation |
 | `program_spec.lua`, `query_document_spec.lua` | Query/Document userdata, continuations, finalizers, mutation and lifetime |
@@ -47,7 +48,7 @@ platforms, Linux LuaJIT, shared Core, installed-package consumption and sanitize
 | `components.lua`, `nfc_type2.lua`, examples | Binding registration and public API integration |
 | `test_*.py` | Version, workflow, gate, dependency identity and publication rejection contracts |
 
-The full runner requires all 23 CTest entries, positive Busted/Query counts and
+The full runner requires all 26 CTest entries, positive Busted/Query counts and
 zero failed, pending or skipped tests. It builds Core only as the required
 library. It does not duplicate Core parser/writer suites. The shared corpus
 remains owned by Core and is always selected from the linked Core revision.

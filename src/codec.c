@@ -4,16 +4,21 @@
 #include "codec.h"
 #include "common.h"
 #include "error.h"
+#include "format.h"
+#include "schema.h"
 
 #include <tlv/codec/digits.h>
 #include <tlv/codec/number.h>
+#include <tlv/codec/structure.h>
 #include <tlv/codec/text.h>
+#include <tlv/schema/number.h>
 #include <tlv/value.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
 
 #define CODEC_MT "opentlv.Codec"
+#define STRUCTURE_CODEC_MT "opentlv.StructureCodec"
 
 typedef struct lua_codec {
     tlv_codec_t                    codec;
@@ -22,6 +27,10 @@ typedef struct lua_codec {
         tlv_number_codec_config_t number;
         tlv_text_codec_config_t   text;
         tlv_digits_codec_config_t digits;
+        struct {
+            tlv_schema_number_t number;
+            tlv_schema_entry_t  entry;
+        } schema_number;
     } config;
     int custom;
 } lua_codec_t;
@@ -236,41 +245,70 @@ static tlv_result_t custom_run(custom_call_t* call) {
     return call->failed ? TLV_ERR_INVALID_VALUE : TLV_OK;
 }
 
+/* Value and structure callbacks share the protected input and output steps. */
+static tlv_result_t custom_input(const void* context, const uint8_t* data, size_t size) {
+    custom_call_t* call = (custom_call_t*)context;
+    call->data = data;
+    call->size = size;
+    return custom_run(call);
+}
+
+/* Calls the Lua encoder once; the size query and the write reuse its string. */
+static tlv_result_t custom_output(const void* context, uint8_t* data, size_t capacity,
+                                  size_t* written) {
+    custom_call_t* call = (custom_call_t*)context;
+    if (!call->result) {
+        tlv_result_t code = custom_run(call);
+        if (code != TLV_OK) return code;
+    }
+    size_t      length;
+    const char* bytes = lua_tolstring(call->L, call->result, &length);
+    if (data && capacity < length) return TLV_ERR_BUFFER_TOO_SHORT;
+    if (data && length) memcpy(data, bytes, length);
+    *written = length;
+    return TLV_OK;
+}
+
 static tlv_result_t custom_decode(const void* context, const uint8_t* data, size_t size,
                                   void* value, size_t capacity,
                                   tlv_codec_diagnostic_t* diagnostic) {
     tlv_codec_diagnostic_init(diagnostic, TLV_CODEC_OP_DECODE);
-    custom_call_t* call = (custom_call_t*)context;
     (void)value;
     (void)capacity;
-    call->data = data;
-    call->size = size;
-    return tlv_codec_diagnostic_result(diagnostic, custom_run(call));
+    return tlv_codec_diagnostic_result(diagnostic, custom_input(context, data, size));
 }
 
 static tlv_result_t custom_encode(const void* context, const void* value, size_t size,
                                   uint8_t* data, size_t capacity, size_t* written,
                                   tlv_codec_diagnostic_t* diagnostic) {
     tlv_codec_diagnostic_init(diagnostic, TLV_CODEC_OP_ENCODE);
-    custom_call_t* call = (custom_call_t*)context;
     (void)value;
     (void)size;
-    if (!call->result) {
-        tlv_result_t code = custom_run(call);
-        if (code != TLV_OK) return tlv_codec_diagnostic_result(diagnostic, code);
-    }
-    size_t      length;
-    const char* bytes = lua_tolstring(call->L, call->result, &length);
-    if (data && capacity < length)
-        return tlv_codec_diagnostic_result(diagnostic, TLV_ERR_BUFFER_TOO_SHORT);
-    if (data && length) memcpy(data, bytes, length);
-    *written = length;
-    return tlv_codec_diagnostic_result(diagnostic, TLV_OK);
+    return tlv_codec_diagnostic_result(diagnostic, custom_output(context, data, capacity, written));
 }
 
-static tlv_codec_t prepare_custom(lua_State* L, lua_codec_t* codec, custom_call_t* call,
-                                  int encode) {
-    tlv_codec_t native = codec->codec;
+/* Core initializes the diagnostic and validates the sequence around these. */
+static tlv_result_t structure_decode(const void* context, const tlv_format_t* format,
+                                     const uint8_t* data, size_t size, void* value, size_t capacity,
+                                     tlv_codec_diagnostic_t* diagnostic) {
+    (void)format;
+    (void)value;
+    (void)capacity;
+    return tlv_codec_diagnostic_result(diagnostic, custom_input(context, data, size));
+}
+
+static tlv_result_t structure_encode(const void* context, const tlv_format_t* format,
+                                     const void* value, size_t size, uint8_t* data, size_t capacity,
+                                     size_t* written, tlv_codec_diagnostic_t* diagnostic) {
+    (void)format;
+    (void)value;
+    (void)size;
+    return tlv_codec_diagnostic_result(diagnostic, custom_output(context, data, capacity, written));
+}
+
+/* Roots the protected closure that applies the `encode` or `decode` callback
+ * from the environment of the userdata at index 1 to argument 2. */
+static void prepare_call(lua_State* L, custom_call_t* call, int encode) {
     memset(call, 0, sizeof(*call));
     call->L = L;
     call->input = encode;
@@ -285,6 +323,12 @@ static tlv_codec_t prepare_custom(lua_State* L, lua_codec_t* codec, custom_call_
     lua_pushvalue(L, 2);
     lua_pushcclosure(L, invoke_custom, 3);
     call->closure = lua_gettop(L);
+}
+
+static tlv_codec_t prepare_custom(lua_State* L, lua_codec_t* codec, custom_call_t* call,
+                                  int encode) {
+    tlv_codec_t native = codec->codec;
+    prepare_call(L, call, encode);
     native.context = call;
     return native;
 }
@@ -359,19 +403,48 @@ static size_t option_size(lua_State* L, const char* name) {
     return value;
 }
 
-static int number_codec(lua_State* L) {
+static void set_environment(lua_State* L, int index) {
+#if LUA_VERSION_NUM == 501
+    lua_setfenv(L, index);
+#else
+    lua_setuservalue(L, index);
+#endif
+}
+
+static void number_config(lua_State* L, tlv_number_codec_config_t* config) {
     static const char* const encodings[] = {"binary_be", "binary_le", "bcd", NULL};
+    lua_getfield(L, 1, "encoding");
+    config->encoding = (tlv_number_encoding_t)luaL_checkoption(L, -1, "binary_be", encodings);
+    lua_pop(L, 1);
+    config->width = option_size(L, "width");
+    size_t digits = option_size(L, "digits");
+    if (digits > 18) luaL_error(L, "digits must be at most 18");
+    config->digits = (unsigned)digits;
+}
+
+static int number_codec(lua_State* L) {
     luaL_checktype(L, 1, LUA_TTABLE);
     lua_codec_t* codec = new_codec(L);
-    lua_getfield(L, 1, "encoding");
-    codec->config.number.encoding =
-        (tlv_number_encoding_t)luaL_checkoption(L, -1, "binary_be", encodings);
-    lua_pop(L, 1);
-    codec->config.number.width = option_size(L, "width");
-    size_t digits = option_size(L, "digits");
-    if (digits > 18) return luaL_error(L, "digits must be at most 18");
-    codec->config.number.digits = (unsigned)digits;
+    number_config(L, &codec->config.number);
     codec->codec = tlv_number_codec(&codec->config.number);
+    codec->rep = &number_rep;
+    return 1;
+}
+
+/* The userdata environment retains the rule's tag and name strings. */
+static int schema_number_codec(lua_State* L) {
+    luaL_checktype(L, 1, LUA_TTABLE);
+    lua_settop(L, 1);
+    lua_codec_t* codec = new_codec(L);
+    lua_newtable(L);
+    lua_getfield(L, 1, "rule");
+    if (!lua_istable(L, -1)) return luaL_error(L, "rule must be a length rule table");
+    opentlv_lua_schema_entry(L, 4, 3, &codec->config.schema_number.entry);
+    lua_pop(L, 1);
+    set_environment(L, 2);
+    codec->config.schema_number.number.schema = &codec->config.schema_number.entry;
+    number_config(L, &codec->config.schema_number.number.representation);
+    codec->codec = tlv_schema_number_codec(&codec->config.schema_number.number);
     codec->rep = &number_rep;
     return 1;
 }
@@ -403,42 +476,120 @@ static int digits_codec(lua_State* L) {
     return 1;
 }
 
-static int custom_codec(lua_State* L) {
-    luaL_checktype(L, 1, LUA_TTABLE);
-    lua_codec_t* codec = new_codec(L);
-    codec->custom = 1;
-    /* A GC-visible userdata environment, rather than registry roots, permits
-     * collection even when a callback closes over its own codec. Snapshot the
-     * functions so mutation of the caller's table cannot change the descriptor. */
+/* A GC-visible userdata environment, rather than registry roots, permits
+ * collection even when a callback closes over its own codec. Snapshots the
+ * optional callbacks of the table at index 1 into a new environment table left
+ * on the stack, so mutation of the caller's table cannot change the
+ * descriptor; returns bit 1 for `decode` and bit 2 for `encode`. */
+static int snapshot_callbacks(lua_State* L) {
+    static const char* const names[] = {"decode", "encode"};
+    int                      present = 0;
     lua_newtable(L);
-    const char* names[] = {"decode", "encode"};
     for (int i = 0; i < 2; ++i) {
         lua_getfield(L, 1, names[i]);
         if (!lua_isnil(L, -1)) {
             luaL_checktype(L, -1, LUA_TFUNCTION);
-            if (i)
-                codec->codec.encode = custom_encode;
-            else
-                codec->codec.decode = custom_decode;
+            present |= 1 << i;
         }
         lua_setfield(L, -2, names[i]);
     }
-#if LUA_VERSION_NUM == 501
-    lua_setfenv(L, -2);
-#else
-    lua_setuservalue(L, -2);
-#endif
+    return present;
+}
+
+static int custom_codec(lua_State* L) {
+    luaL_checktype(L, 1, LUA_TTABLE);
+    lua_codec_t* codec = new_codec(L);
+    codec->custom = 1;
+    int callbacks = snapshot_callbacks(L);
+    if (callbacks & 1) codec->codec.decode = custom_decode;
+    if (callbacks & 2) codec->codec.encode = custom_encode;
+    set_environment(L, -2);
+    return 1;
+}
+
+/* opentlv.structure_codec{format, schema, max_depth, max_elements, decode,
+ * encode}: the environment roots the Format, the Schema and the callbacks.
+ * Each call copies the descriptor with its own callback frame as context. */
+static int structure_codec_new(lua_State* L) {
+    luaL_checktype(L, 1, LUA_TTABLE);
+    lua_settop(L, 1);
+    tlv_structure_codec_t* codec = lua_newuserdata(L, sizeof(*codec));
+    memset(codec, 0, sizeof(*codec));
+    luaL_getmetatable(L, STRUCTURE_CODEC_MT);
+    lua_setmetatable(L, -2);
+    int callbacks = snapshot_callbacks(L);
+    if (callbacks & 1) codec->decode = structure_decode;
+    if (callbacks & 2) codec->encode = structure_encode;
+    lua_getfield(L, 1, "format");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_getfield(L, LUA_REGISTRYINDEX, OPENTLV_LUA_DEFAULT_FORMAT_KEY);
+        if (lua_isnil(L, -1)) return luaL_error(L, "format is required when BER is disabled");
+    }
+    codec->format = &opentlv_lua_check_format(L, -1)->format;
+    lua_setfield(L, 3, "format");
+    lua_getfield(L, 1, "schema");
+    if (!lua_isnil(L, -1)) codec->schema = opentlv_lua_check_structure_schema(L, -1);
+    lua_setfield(L, 3, "schema");
+    codec->max_depth = opentlv_lua_size_option(L, 1, "max_depth", 32);
+    codec->max_elements = opentlv_lua_size_option(L, 1, "max_elements", 100000);
+    set_environment(L, 2);
+    return 1;
+}
+
+static int structure_codec_decode(lua_State* L) {
+    tlv_structure_codec_t* codec = luaL_checkudata(L, 1, STRUCTURE_CODEC_MT);
+    size_t                 size;
+    const uint8_t*         data = (const uint8_t*)opentlv_lua_codec_string(L, 2, &size);
+    lua_settop(L, 2);
+    tlv_codec_diagnostic_t diagnostic;
+    custom_call_t          call;
+    tlv_structure_codec_t  native = *codec;
+    unsigned char          dummy;
+    prepare_call(L, &call, 0);
+    native.context = &call;
+    tlv_result_t code =
+        tlv_structure_decode(&native, data, size, &dummy, sizeof dummy, &diagnostic);
+    if (call.failed) return lua_error(L);
+    if (code != TLV_OK) return raise_codec_diagnostic(L, &diagnostic);
+    return 1;
+}
+
+static int structure_codec_encode(lua_State* L) {
+    tlv_structure_codec_t* codec = luaL_checkudata(L, 1, STRUCTURE_CODEC_MT);
+    luaL_checkany(L, 2);
+    lua_settop(L, 2);
+    tlv_codec_diagnostic_t diagnostic;
+    custom_call_t          call;
+    tlv_structure_codec_t  native = *codec;
+    size_t                 required = 0, written = 0;
+    prepare_call(L, &call, 1);
+    native.context = &call;
+    tlv_result_t code =
+        tlv_structure_encode(&native, &call, sizeof call, NULL, 0, &required, &diagnostic);
+    if (call.failed) return lua_error(L);
+    if (code != TLV_OK) return raise_codec_diagnostic(L, &diagnostic);
+    uint8_t* bytes = lua_newuserdata(L, required ? required : 1);
+    code =
+        tlv_structure_encode(&native, &call, sizeof call, bytes, required, &written, &diagnostic);
+    if (code != TLV_OK) return raise_codec_diagnostic(L, &diagnostic);
+    lua_pushlstring(L, (const char*)bytes, written);
     return 1;
 }
 
 void opentlv_lua_open_codec(lua_State* L, int module_index) {
     static const opentlv_lua_method_t methods[] = {
         {"decode", codec_decode}, {"encode", codec_encode}, {NULL, NULL}};
+    static const opentlv_lua_method_t structure_methods[] = {
+        {"decode", structure_codec_decode}, {"encode", structure_codec_encode}, {NULL, NULL}};
     opentlv_lua_new_type(L, CODEC_MT, methods, NULL, NULL, NULL);
+    opentlv_lua_new_type(L, STRUCTURE_CODEC_MT, structure_methods, NULL, NULL, NULL);
     lua_newtable(L);
     opentlv_lua_codec_builtins(L);
     lua_pushcfunction(L, number_codec);
     lua_setfield(L, -2, "number");
+    lua_pushcfunction(L, schema_number_codec);
+    lua_setfield(L, -2, "schema_number");
     lua_pushcfunction(L, text_codec);
     lua_setfield(L, -2, "text");
     lua_pushcfunction(L, digits_codec);
@@ -446,4 +597,6 @@ void opentlv_lua_open_codec(lua_State* L, int module_index) {
     lua_setfield(L, module_index, "codecs");
     lua_pushcfunction(L, custom_codec);
     lua_setfield(L, module_index, "codec");
+    lua_pushcfunction(L, structure_codec_new);
+    lua_setfield(L, module_index, "structure_codec");
 }

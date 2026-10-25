@@ -8,9 +8,10 @@ The `opentlv` module is an experimental Lua binding for OpenTLV. It binds a
 Reader and a pull Tree Reader with incremental input, source preservation,
 a Writer, Tree Writer with structural events and measurement, Schema,
 tag/length/value `Element` tables and preorder tree
-traversal, borrowed Query, an owned mutable Document with checked Nodes and
-[custom Formats](#custom-formats) composed from Core's field encodings.
-Document Builder remains unbound; see the
+traversal, borrowed Query, an owned mutable Document with checked Nodes,
+[custom Formats](#custom-formats) composed from Core's field encodings,
+[Value](#value-codecs) and [structure codecs](#structure-codecs) and
+[wire generation](#wire-generation). See the
 [binding matrix](https://github.com/OpenTLV/opentlv/blob/main/docs/concepts/bindings.md#capability-implementation-matrix) and
 [Lua development guide](implementation.md).
 
@@ -733,6 +734,26 @@ All constructors take a table. Number `encoding` is `"binary_be"` (default),
 its C configuration. The C engine validates configuration and Value semantics
 when the codec is invoked.
 
+`tlv.codecs.schema_number {rule = rule, ...}` combines a length rule with the
+`number{}` configuration (`tlv_schema_number_t`), which it takes in the same
+`encoding`, `width` and `digits` fields. `rule` has a binary `tag` and the
+optional `name`, `min_length`, `max_length`, `length_multiple` and `flags` of a
+[length schema](#length-schemas-and-value-constraints) rule; the codec copies it
+and keeps its strings. Decode checks the Value length against the rule before
+converting. With `width` zero, encode uses the shortest width the rule permits
+for the value; a fixed `width` that the rule rejects raises instead of changing
+width. A rejected length raises `SCHEMA` with the finding in
+`codec_detail.schema`, and reversed bounds raise `INVALID_SCHEMA`. Query
+providers accept it like `number{}`.
+
+```lua
+local amount = tlv.codecs.schema_number {
+    rule = {tag = string.char(0x9F, 0x02), min_length = 2, max_length = 4},
+}
+assert(amount:encode(5) == string.char(0, 5))
+assert(amount:encode(0x123456) == string.char(0x12, 0x34, 0x56))
+```
+
 ### Builtin representations
 
 Names below are relative to `tlv.codecs`. Byte strings are binary Lua strings,
@@ -821,11 +842,98 @@ that string for the C size query and write. Callbacks run through a native
 objects propagate unchanged after the C call returns. Recursive codec calls
 and use from different coroutines are supported, but yielding through a
 callback is not. Callback references participate in Lua garbage collection,
-including cycles that capture the codec itself.
-
-This API binds Value codecs. The separate `tlv_structure_codec_t` contract
-for complete objects remains unbound. See the runnable
+including cycles that capture the codec itself. See the runnable
 [codec example](../examples/codec.lua).
+
+### Structure codecs
+
+`opentlv.structure_codec(config)` maps one complete TLV sequence to one Lua
+value through `tlv_structure_decode()` and `tlv_structure_encode()`. `config`
+takes `format` (BER by default; required when BER is disabled), an optional
+`schema` (a Schema or a checked Schema), `max_depth` (default 32),
+`max_elements` (default 100000) and the optional `decode` and `encode`
+callbacks.
+
+```lua
+local record = tlv.structure_codec {
+    format = format,
+    schema = schema,
+    decode = function(sequence) return {size = #sequence} end,
+    encode = function(value) return value.bytes end,
+}
+```
+
+`record:decode(data)` lets C validate the complete sequence (framing, nesting,
+limits and the optional Schema) before `decode(data)` receives it as a string,
+and returns the callback's value. `record:encode(value)` calls `encode(value)`
+once; C validates the returned string against the same rules before it is
+returned. Without a Schema, C checks framing and nesting only. Traversal uses
+at most 64 frames (`TLV_STRUCTURE_MAX_DEPTH`, or `TLV_SCHEMA_MAX_DEPTH` with a
+Schema). `max_depth` and `max_elements` follow Tree Reader conventions, so zero
+is a real limit.
+
+A validation failure raises an `opentlv.Error` whose `codec_detail.cause_name`
+is `"reader"` or `"schema"`, with the finding in `codec_detail.reader` or
+`codec_detail.schema`. Encode failures report `location.domain = "output"`,
+because offsets refer to the produced bytes. A missing callback raises
+`UNSUPPORTED` for that direction. Callbacks follow the custom codec rules
+above: they are snapshotted, run under protected calls and raise their own
+errors unchanged; recursion and coroutines work, yielding does not, and
+cycles are collectible. The codec keeps its Format and Schema alive. The
+[generate example](../examples/generate.lua) decodes records this way.
+
+## Wire generation
+
+`opentlv.generator(config)` binds Core's deterministic wire generator
+(`tlv_generate()`). Each case is one nonempty complete stream of candidate
+elements that decodes and re-encodes byte-exactly through the Format. Cases
+are wire data for parsers and round trips, not Schema- or codec-valid content.
+
+```lua
+local generator = tlv.generator {
+    format = tlv.formats.fixed(1, 1, "big"),
+    seed = 2026,
+    candidates = {{tag = string.char(1), min_value_size = 0, max_value_size = 4}},
+    max_elements = 4,
+    max_depth = 0,
+    max_value_size = 4,
+    max_case_size = 32,
+}
+assert(generator:generate(7) == generator:generate(7))
+```
+
+| Field | Meaning |
+| --- | --- |
+| `format` | Required readable and writable Format, including composed Formats |
+| `candidates` | Array of `{tag, min_value_size, max_value_size}` with an inclusive Value size interval. A `nil` Tag is an absent identifier, `""` an explicitly empty one |
+| `seed` | Optional, default 0 |
+| `max_elements` | Required positive bound on all elements, including parents |
+| `max_depth` | Required child depth bound; roots have depth 0, at most 64 |
+| `max_value_size` | Required bound on every Value, in bytes |
+| `max_case_size` | Required positive bound on a complete case, in bytes |
+
+The Format decides which candidates are constructed; those receive generated
+child streams, and primitive Values contain arbitrary bytes. Leave out stream
+terminators and identifiers that need contextual ordering.
+
+`generator:generate(case_index)` (default 0) returns one case as a binary
+string. The same `opentlv.GENERATOR_VERSION` (`TLV_GENERATOR_VERSION`), Format,
+candidates, limits, seed and case index produce the same bytes, independent of
+earlier calls; record the version with a corpus. Different seeds or indexes
+do not guarantee different bytes. Seeds and case indexes follow the
+[codec integer rules](#integers-and-configured-codecs), so decimal strings
+supply full 64-bit values. `generator:workspace_size()` returns the scratch
+bytes one case needs, `(max_depth + 1) * max_case_size`; `generate()`
+allocates the workspace and the output for each call.
+
+The generator copies its configuration and keeps the Format alive. Lua checks
+only types and ranges. Core validates the limits, the candidates and the
+Format's read and write capability on every `generate()` call
+(`workspace_size()` checks only the limits and candidates) and raises `INVALID_ARG`,
+`UNSUPPORTED` (no read or write capability, or `max_depth` above 64),
+`OVERFLOW`, or `LIMIT` when its bounded search finds no case, for example
+because the Format cannot write any candidate. See the
+[generate example](../examples/generate.lua) (`lua examples/generate.lua`).
 
 ## Query and Document
 

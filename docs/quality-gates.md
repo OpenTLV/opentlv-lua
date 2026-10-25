@@ -186,6 +186,13 @@ references them. The current entries are:
   `tlv_escaped_format_init()` and `tlv_variable_format_init()` install in a
   descriptor. Core calls them through the descriptor, so Lua has no separate
   path; the initializers themselves remain counted.
+- the number, text, digits and Schema-number Value codec callbacks
+  (`tlv_number_*`, `tlv_text_*`, `tlv_digits_*` and `tlv_schema_number_*`
+  decode and encode). The inline constructors `tlv_number_codec()`,
+  `tlv_text_codec()`, `tlv_digits_codec()` and `tlv_schema_number_codec()`
+  install them in the descriptor that `codecs.number{}`, `text{}`, `digits{}`
+  and `schema_number{}` invoke through `tlv_codec_decode()` and
+  `tlv_codec_encode()`; inline constructors are not `TLV_API` symbols.
 - the Reader, Writer and Tree Writer wrappers that call their bound `_diag`
   counterpart with a NULL diagnostic (`tlv_read`, `tlv_reader_next`,
   `tlv_reader_visit`, `tlv_tree_reader_next`, `tlv_tree_reader_next_event`,
@@ -267,6 +274,19 @@ Document, Query and Schema operations (#29) reference or ignore every symbol of
 `tlv/schema/number.h` and the Value codec headers belong to the codec work
 (#30); `tlv/definition.h`, `tlv_diagnostic_path_string` and
 `tlv_location_translate` remain for the final coverage review (#31).
+
+Codec and wire generation operations (#30) reference or ignore every symbol of
+`tlv/codec/*.h`, `tlv/schema/number.h` and `tlv/generator.h`. Core coverage of
+the same pin is 202 of 205 symbols (98.5 %) with 92 ignored:
+
+| Header | Referenced | Ignored | Lua API |
+| --- | ---: | ---: | --- |
+| `tlv/codec/number.h`, `tlv/codec/text.h`, `tlv/codec/digits.h` | 0/0 | 6 | `codecs.number{}`, `text{}`, `digits{}` through the inline constructors |
+| `tlv/schema/number.h` | 0/0 | 2 | `codecs.schema_number{}` |
+| `tlv/codec/structure.h` | 2/2 | 0 | `structure_codec()` |
+| `tlv/generator.h` | 2/2 | 0 | `generator()`, `generate()`, `workspace_size()` |
+
+The three remaining symbols are the scope of #31.
 
 Run it locally from the repository root:
 
