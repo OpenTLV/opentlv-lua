@@ -5,10 +5,12 @@ for input, expected output and the public API. You can use this guide without
 studying native C implementation contracts.
 
 The `opentlv` module is an experimental Lua binding for OpenTLV. It binds a
-Reader, Writer, Tree Writer, Schema, tag/length/value `Element` tables and preorder tree
+Reader and a pull Tree Reader with incremental input, source preservation,
+a Writer, Tree Writer with structural events and measurement, Schema,
+tag/length/value `Element` tables and preorder tree
 traversal, borrowed Query, an owned mutable Document with checked Nodes and
 [custom Formats](#custom-formats) composed from Core's field encodings.
-Pull/resumable Tree Reader and Document Builder remain unbound; see the
+Document Builder remains unbound; see the
 [binding matrix](https://github.com/OpenTLV/opentlv/blob/main/docs/concepts/bindings.md#capability-implementation-matrix) and
 [Lua development guide](implementation.md).
 
@@ -66,10 +68,68 @@ The explicit method form, `reader:next()` (`nil` at the end) and
 and `reader:format()` report the reader's current byte offset and the
 format it was constructed with.
 
+`opentlv.read(data, format)` reads only the first element and returns it
+with its encoded size; trailing bytes are not read and empty input returns
+`nil`. `opentlv.read_source(data, format)` returns the element and its
+[Source](#source-preservation) instead.
+
 Runnable version, parsing a nested BER document and handling truncated
 input:
 [parse.lua](../examples/parse.lua)
 (`lua examples/parse.lua`).
+
+### Incremental input
+
+`opentlv.reader(data, format, {final_input = false})` starts a Reader over
+input that is not complete yet. When the current window ends inside an
+element, `next()` raises an error with `code == opentlv.errors.NEED_MORE_DATA`
+and `severity == "info"`, and the reader stays where it was.
+`reader:set_input(data, discard, final_input)` then supplies a new window:
+
+- `data` must start with the bytes of the old window after its first
+  `discard` bytes, followed by any new bytes. Otherwise the call raises
+  `INVALID_ARG` and changes nothing.
+- `discard` (default 0) may be at most `reader:consumed()`, the bytes the
+  reader no longer needs.
+- `final_input` (default `true`) declares the end of the stream. Final input
+  cannot be extended later (`INVALID_STATE`).
+
+```lua
+local reader = opentlv.reader(first_chunk, opentlv.formats.ber, {final_input = false})
+local window = first_chunk
+local ok, err = pcall(reader.next, reader)
+if not ok and err.code == opentlv.errors.NEED_MORE_DATA then
+    local discard = reader:consumed()
+    window = window:sub(discard + 1) .. next_chunk
+    reader:set_input(window, discard, false)
+end
+```
+
+`reader:offset()` and element `offset` fields are absolute positions in the
+whole stream, including discarded bytes; `reader:consumed()` (also
+`reader:position()`) is relative to the current window. `reader:at_end()` is
+true only at the end of final input. A Reader created without options reads
+final input, as before.
+
+### Source preservation
+
+`reader:next_source()` returns `element, source` from the same single decode.
+A Source (`opentlv.Source`) is the original encoding of one element:
+
+- `source:bytes()` returns the exact encoded bytes, trailer included.
+- `source:layout()` returns `size` and the `header`, `tag`, `length`,
+  `value` and `trailer` ranges as `{offset, size}` tables relative to the
+  element start; fields the Format does not report are absent.
+- `source:element()`, `source:offset()` and `source:format()` return the
+  decoded element, its absolute offset and the decoding Format.
+- `source:preserve(element)` returns the original bytes through Core's
+  `tlv_source_preserve()`, but only while `element` (by default the decoded
+  one) still has the decoded Tag and Value. Changed content raises
+  `INVALID_ARG` with `operation = "preserve"`.
+
+`writer:preserve(source, element)` appends the same bytes to a Writer, see
+[Writing](#writing). A Source keeps its input string and Format alive, so it
+stays valid after the Reader is collected or given new input.
 
 ## Visitor and tree traversal
 
@@ -112,6 +172,54 @@ while retaining the library's default DER input/value size limits. Omitted
 DER options retain the C defaults (depth 32 and 100000 elements); explicit
 DER depths may be up to 64. Limits must be nonnegative integers representable by native
 `size_t`; zero is a real limit. Without a callback, `visited` is zero.
+
+`reader:visit(callback)` runs the same Visitor over an existing Reader and
+returns `visited, stopped`. It continues from the reader's position: after a
+stop, or after `NEED_MORE_DATA` and `set_input()`, the next call resumes with
+the next element and does not repeat elements already passed to the callback.
+The callback must not use the same reader; such a call raises an error.
+
+### Tree Reader
+
+`opentlv.tree_reader(data, format, options)` pulls the elements of a tree one
+at a time, in preorder, using the C Tree Reader. Each item is an element table
+with `depth` (roots are 0) and `constructed`. Like a Reader, it can be used in a
+generic for:
+
+```lua
+for item in opentlv.tree_reader(data, opentlv.formats.ber) do
+    print(string.rep("  ", item.depth) .. item.tag, item.constructed)
+end
+```
+
+Options are `final_input` (default `true`), `frame_capacity` and `max_depth`
+(both default to 64, the C `TLV_TREE_DEFAULT_DEPTH`) and `max_elements`
+(default 65536). The reader needs one frame for each constructed element it
+enters. Exceeding `max_depth` or `max_elements` raises `LIMIT`; running out of
+frames raises `BUFFER_TOO_SHORT`. Each Tree Reader uses the generic C Tree
+Reader, including for `opentlv.formats.der`; `visit_tree()` remains the entry
+point for the stricter DER traversal.
+
+- `next()` returns the next item, or `nil` at the end of final input.
+- `next_event()` returns structural events instead: `kind` is `"begin"` for a
+  constructed element, `"element"` for a primitive one and `"end"` when a
+  constructed element closes. Begin and element events carry the element
+  fields and `constructed`; every event has `depth`, `offset` and `skipped`.
+  An end event's `offset` is where the closed Value ends. Do not mix
+  `next()` and `next_event()` on one reader if you need balanced events, since
+  `next()` hides end events.
+- `skip_subtree()` skips the children of the constructed item just returned,
+  without decoding them; an event reader then returns an end event with
+  `skipped = true`. It also works after a failed descent (`LIMIT` or
+  `BUFFER_TOO_SHORT`), so traversal can continue with the next sibling.
+  Without such an item it raises `INVALID_STATE`.
+- `visit(callback)` calls `callback(element, depth)` for the remaining items,
+  like `visit_tree()`, and returns `visited, stopped`. When the callback stops
+  at a constructed element, the next pull or visit continues with its
+  children unless you call `skip_subtree()` first.
+- `set_input()`, `consumed()`, `offset()`, `at_end()` and `format()` work as for
+  an [incremental Reader](#incremental-input). A constructed element is
+  returned only when all of its bytes are available.
 
 ## Error handling
 
@@ -158,9 +266,20 @@ local encoded = writer:bytes()
 - `write_element(element)` accepts a Reader-style table with `tag` and `value`.
   Length is derived from `value`; metadata such as `length` and `offset` does
   not override the content.
+- `copy_encoded(bytes)` appends already encoded bytes unchanged, without
+  checking their framing.
+- `preserve(source, element)` appends the original bytes of a
+  [Source](#source-preservation) while `element` (by default the decoded one)
+  is unchanged, keeping framing such as a non-minimal BER length that
+  re-encoding would replace. The writer's Format does not reinterpret them.
 - `bytes()` returns an independent immutable string containing written bytes.
 - `size()` and `remaining()` report written bytes and unused capacity.
 - `format()` returns the retained Format object.
+
+`opentlv.encoded_size(tag, value, format)` returns the encoded size of one
+element without writing it. `value` is the Value string, or a number giving
+only the Value length for Formats that can size an element without reading its
+Value; a Format that needs the Value bytes rejects the number form.
 
 Tag strings represent raw byte identity: `"5F2A"` is four ASCII bytes, not
 `string.char(0x5F, 0x2A)`. Input strings are borrowed only during a write call.
@@ -193,6 +312,41 @@ Options must be nonnegative native integers. Scratch must hold the largest
 closed parent Value; each open parent uses one frame. Maximum item depth
 counts roots as zero. Open Tags are copied by the C Tree Writer into bounded
 Tag storage, so temporary Lua strings can be collected safely.
+
+`write_event(event)` consumes one structural event in the shape
+`tree_reader:next_event()` returns: `kind`, `depth`, optional `skipped`, and
+`tag` and `value` for begin and element events. A begin event's Value is
+ignored. Events from a Tree Reader therefore rebuild the tree with the
+writer's Format:
+
+```lua
+local reader = tlv.tree_reader(data, tlv.formats.ber)
+local writer = tlv.tree_writer(tlv.formats.ber)
+for event in function() return reader:next_event() end do
+    writer:write_event(event)
+end
+local rebuilt = writer:finish()
+```
+
+Events at the wrong depth, an end without an open parent and skipped end
+events raise errors and leave the writer unchanged.
+
+`opentlv.measure_tree(format, items, options)` encodes a whole tree in one
+call and returns the encoding; its length is the exact encoded size. `items`
+is an array of preorder items (`tag`, `value`, `depth`, `constructed`; a
+constructed item's `value` is ignored and may be omitted) or a function or
+callable object returning one item per call and `nil` at the end, for example
+a Tree Reader. `opentlv.measure_events(format, events, options)` does the
+same for a balanced event sequence. Options and defaults are those of
+`tree_writer()`; the output and scratch storage are fixed for the call. When
+it is too small, the `BUFFER_TOO_SHORT` error has `required_data` or
+`required_scratch`: at least that much is needed, so retry with more storage
+and a fresh item source. Errors raised by an item function propagate
+unchanged.
+
+Runnable version, feeding chunked input through an incremental Tree Reader
+into a Tree Writer and preserving one element's original framing:
+[stream.lua](../examples/stream.lua) (`lua examples/stream.lua`).
 
 ### Writer errors
 

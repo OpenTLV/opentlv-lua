@@ -41,6 +41,8 @@ add_library(opentlv_lua MODULE
     src/formats/compose.c
     src/reader.c
     src/reader.h
+    src/source.c
+    src/source.h
     src/query.c
     src/query.h
     src/path_query.h
@@ -253,6 +255,12 @@ if(OPENTLV_BUILD_LUA_TESTS)
         set_tests_properties(Integration_lua_writer PROPERTIES
             LABELS "integration;lua"
             ENVIRONMENT "${_lua_test_environment}")
+        add_test(NAME Integration_lua_stream
+            COMMAND ${OPENTLV_LUA_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests/stream_spec.lua")
+        add_test(NAME Integration_lua_stream_allocator
+            COMMAND ${OPENTLV_LUA_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests/stream_spec.lua" --allocator)
+        set_tests_properties(Integration_lua_stream Integration_lua_stream_allocator PROPERTIES
+            LABELS "integration;lua" ENVIRONMENT "${_lua_test_environment}")
         add_test(NAME Integration_lua_nfc_type2
             COMMAND ${OPENTLV_LUA_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests/nfc_type2.lua")
         set_tests_properties(Integration_lua_nfc_type2 PROPERTIES
@@ -278,6 +286,11 @@ if(OPENTLV_BUILD_LUA_TESTS)
         set_tests_properties(Integration_example_lua_compose PROPERTIES
             LABELS "integration;examples;lua" ENVIRONMENT "${_lua_test_environment}"
             PASS_REGULAR_EXPRESSION "Hello, composed world!")
+        add_test(NAME Integration_example_lua_stream
+            COMMAND ${OPENTLV_LUA_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/examples/stream.lua")
+        set_tests_properties(Integration_example_lua_stream PROPERTIES
+            LABELS "integration;examples;lua" ENVIRONMENT "${_lua_test_environment}"
+            PASS_REGULAR_EXPRESSION "Hello, streamed world!")
     else()
         message(STATUS "lua interpreter not found; skipping the Lua binding examples.")
     endif()

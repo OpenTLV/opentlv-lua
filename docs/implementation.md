@@ -23,7 +23,8 @@ model](https://github.com/OpenTLV/opentlv/blob/main/docs/concepts/bindings.md).
 
 It targets Lua 5.1 through 5.4 and LuaJIT (which implements the Lua 5.1 C
 API), using only the portable subset of the Lua C API common to all of them;
-see `src/compat.h`. It covers Reader, Writer, Tree Writer, Element and Tag, and
+see `src/compat.h`. It covers Reader and Tree Reader with incremental input,
+Source preservation, Writer, Tree Writer, Element and Tag, and
 preorder tree traversal (`opentlv.visit_tree`, built on `tlv_tree_reader_visit()`/
 `tlv_der_visit()`), structural Schema validation with detailed diagnostic reports,
 Value codecs with builtin and custom callback support, compiled path Query,
@@ -101,20 +102,54 @@ its `tlv/field/` read or write primitive.
 tag-only framing, configuration rejection and snapshots, every Format entry
 point and retained lifetimes. CTest also runs `examples/compose.lua`.
 
+## Reader and Source implementation
+
+`src/reader.c` binds the sequential Reader and the Tree Reader. Each cursor
+references its current input string and Format userdata; `set_input()`
+references the new window before Core borrows it and releases the old one
+only after Core accepts it. The binding checks that the new window starts with
+the old undiscarded bytes, a precondition Core leaves to the caller. Tree
+Reader frames are allocated after the finalizer is installed. Elements, items
+and events are copied into Lua tables, so they never borrow a window.
+
+`src/source.c` defines `opentlv.Source`: a copy of Core's `tlv_source_t`
+together with references to the input string and Format it borrows, so
+preservation stays valid after the Reader moves on or is collected.
+
+`reader:visit()` and `tree_reader:visit()` share the protected trampoline of
+`src/visitor.c` with `opentlv.visit()`/`visit_tree()`. While native traversal
+runs, the cursor rejects its own methods, including an explicit finalizer
+call, because Core forbids changing the cursor from its callback.
+
 ## Writer implementation
 
 `src/writer.c` owns bounded output and Tree Writer workspace storage, retains
-Format userdata, and delegates writes to `tlv_writer_write_element_diag()`
-and `tlv_tree_writer_*`. It contains no format-specific encoding logic.
+Format userdata, and delegates writes to `tlv_writer_write_element_diag()`,
+`tlv_writer_copy_encoded_diag()`, `tlv_writer_preserve_diag()` and
+`tlv_tree_writer_*`. It contains no format-specific encoding logic.
 `src/error.c` copies native writer diagnostics into owned Lua error fields.
 The C core remains allocation-free; Lua userdata finalizers release storage
 allocated by the binding, including after partial constructor failures.
+
+`measure_tree()` and `measure_events()` allocate their workspace as Lua
+userdata, so an error never leaks it. Core pulls items through a provider
+callback; the callback runs Lua only inside `lua_pcall()`, stores a Lua error
+and returns a failure to Core, and the error is raised again after Core
+returns. Tag and Value strings of every item stay referenced until the call
+ends, because Core keeps open parent Tags and diagnostics may refer to them.
 
 `tests/writer_spec.lua` runs both under busted and directly with Lua. CTest
 registers the standalone suite whenever the interpreter is available.
 It covers binary strings, Reader/Writer
 roundtrips, exact preset bytes, ownership, nested output, resource exhaustion
 and structured diagnostics.
+
+`tests/stream_spec.lua` runs under busted and directly through CTest. It
+covers incremental windows, resumable visits, Sources and preservation, Tree
+Reader items, events, subtree skipping and limits, raw copies, event writing
+and measurement. Its `--allocator` mode injects Lua allocation failures during
+visits, measurement and Source creation and checks that no callback or item
+stays referenced. CTest also runs `examples/stream.lua`.
 
 ## Schema implementation
 

@@ -6,7 +6,7 @@
 
 #include <stdio.h>
 
-int opentlv_lua_raise_writer_error(lua_State* L, tlv_result_t code,
+void opentlv_lua_push_writer_error(lua_State* L, tlv_result_t code,
                                    const tlv_writer_diagnostic_t* diag) {
     tlv_diagnostic_t diagnostic = diag->diagnostic;
     diagnostic.code = code;
@@ -29,6 +29,11 @@ int opentlv_lua_raise_writer_error(lua_State* L, tlv_result_t code,
         opentlv_lua_codec_push_uint(L, diag->available);
         lua_setfield(L, -2, "available");
     }
+}
+
+int opentlv_lua_raise_writer_error(lua_State* L, tlv_result_t code,
+                                   const tlv_writer_diagnostic_t* diag) {
+    opentlv_lua_push_writer_error(L, code, diag);
     return lua_error(L);
 }
 

@@ -57,9 +57,12 @@ int opentlv_lua_raise(lua_State* L, tlv_result_t code, int has_offset, size_t of
 int opentlv_lua_raise_reader_error(lua_State* L, tlv_result_t code,
                                    const tlv_reader_diagnostic_t* diag);
 
-/* Copies borrowed writer diagnostic fields into the raised Lua error table. */
-int opentlv_lua_raise_writer_error(lua_State* L, tlv_result_t code,
+/* Copies borrowed writer diagnostic fields into a pushed error table, or
+ * raises it; the push form does not raise. */
+void opentlv_lua_push_writer_error(lua_State* L, tlv_result_t code,
                                    const tlv_writer_diagnostic_t* diag);
+int  opentlv_lua_raise_writer_error(lua_State* L, tlv_result_t code,
+                                    const tlv_writer_diagnostic_t* diag);
 
 /* Raises a Format operation failure: "operation" ("decode", "measure" or
  * "encode") and, when `error` is non-NULL, the Format's own detail: "offset",

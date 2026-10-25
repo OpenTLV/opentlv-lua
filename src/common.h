@@ -79,4 +79,22 @@ void opentlv_lua_new_type(lua_State* L, const char* name, const opentlv_lua_meth
  */
 int opentlv_lua_push_element(lua_State* L, const tlv_element_t* element, size_t offset);
 
+/* Converts the number at `index` to size_t, raising an error naming `name`
+ * unless it is a nonnegative integer representable by native size_t. */
+size_t opentlv_lua_check_size(lua_State* L, int index, const char* name);
+
+/* Reads the optional numeric field `name` of the options table at
+ * `options_index` (none or nil means no options) with opentlv_lua_check_size();
+ * a missing field returns `fallback`. The stack is unchanged on return. */
+size_t opentlv_lua_size_option(lua_State* L, int options_index, const char* name, size_t fallback);
+
+/* Reads the optional boolean field `name` of the options table at
+ * `options_index`; a missing field returns `fallback`. */
+int opentlv_lua_boolean_option(lua_State* L, int options_index, const char* name, int fallback);
+
+/* Reads a Reader-style element table at `index`: "tag" (nil for an absent
+ * identifier) and "value" binary strings. Both values are pushed and stay on
+ * the stack, so the borrowed bytes remain rooted while `element` is used. */
+void opentlv_lua_check_element(lua_State* L, int index, tlv_element_t* element);
+
 #endif /* OPENTLV_LUA_COMMON_H */
