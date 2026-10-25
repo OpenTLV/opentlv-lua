@@ -60,7 +60,7 @@
       "symbols": ["tlv_schema_check"]
     },
     {
-      "reason": "Callback implementations installed by bound descriptor initializers (`tlv_fixed_format_init()`, `tlv_fields_format_init()`, `tlv_tagged_fields_format_init()`, `tlv_tagged_binary_format_init()`, `tlv_escaped_format_init()` and `tlv_variable_format_init()`); Core calls them through the descriptor, so Lua has no separate path.",
+      "reason": "Callback implementations installed by bound descriptor initializers (`tlv_fixed_format_init()`, `tlv_fields_format_init()`, `tlv_tagged_fields_format_init()`, `tlv_tagged_binary_format_init()`, `tlv_escaped_format_init()` and `tlv_variable_format_init()`) and inline codec constructors (`tlv_number_codec()`, `tlv_text_codec()`, `tlv_digits_codec()` and `tlv_schema_number_codec()`); Core calls them through the descriptor, so Lua has no separate path.",
       "symbols": [
         "tlv_binary_decode",
         "tlv_binary_measure",
@@ -80,7 +80,15 @@
         "tlv_variable_decode",
         "tlv_variable_measure",
         "tlv_variable_encode",
-        "tlv_variable_is_constructed"
+        "tlv_variable_is_constructed",
+        "tlv_number_decode",
+        "tlv_number_encode",
+        "tlv_text_decode",
+        "tlv_text_encode",
+        "tlv_digits_decode",
+        "tlv_digits_encode",
+        "tlv_schema_number_decode",
+        "tlv_schema_number_encode"
       ]
     }
   ]

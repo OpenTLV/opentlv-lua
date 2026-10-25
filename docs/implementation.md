@@ -27,9 +27,9 @@ see `src/compat.h`. It covers Reader and Tree Reader with incremental input,
 Source preservation, Writer, Tree Writer, Element and Tag, and
 preorder tree traversal (`opentlv.visit_tree`, built on `tlv_tree_reader_visit()`/
 `tlv_der_visit()`), structural Schema validation with detailed diagnostic reports,
-Value codecs with builtin and custom callback support, compiled path Query,
-mutable Document (when `OPENTLV_DOCUMENT=ON`) and custom Formats composed from
-Core's field encodings.
+Value codecs with builtin and custom callback support, structure codecs,
+deterministic wire generation, compiled path Query, mutable Document (when
+`OPENTLV_DOCUMENT=ON`) and custom Formats composed from Core's field encodings.
 
 All Lua source paths on this page are relative to `opentlv-lua`.
 
@@ -75,11 +75,33 @@ Each invocation prepares its own protected closure before entering C, so
 allocation errors cannot unwind across the core and recursive calls do not
 overwrite callback state.
 
+`codecs.schema_number{}` embeds its `tlv_schema_entry_t` and
+`tlv_schema_number_t` in the codec userdata and keeps the rule's Tag and name
+strings in its environment. Structure codecs (`opentlv.StructureCodec`) keep
+their Format, Schema or checked Schema and callbacks in the same kind of
+environment. Each call copies the `tlv_structure_codec_t` and sets its
+context to the call's own protected closure, shared with custom Value codecs.
+Core validates the sequence around the callbacks, and the encoder's string is
+reused for the size query and the validated write into a Lua userdata buffer.
+
+`src/generator.c` snapshots `tlv_generator_options_t` and its candidate table
+in a Generator userdata whose environment roots the Format, the table and the
+candidate Tag strings. `generate()` checks the Format's capabilities, sizes the
+workspace with `tlv_generator_workspace_size()` and calls `tlv_generate()` with
+one Lua userdata block that holds the workspace and the output case. No Lua
+code runs while Core generates.
+
 `Integration_lua_codec`, `Integration_lua_codec_allocator` and
 `Integration_example_lua_codec` run standalone without busted.
 The codec suite also runs under `busted tests` and checks
-every exported static descriptor. Structure codecs remain outside this
-Value-codec binding.
+every exported static descriptor. `tests/codec_generator_spec.lua` runs under
+busted and through `Integration_lua_codec_generator` and its allocator variant.
+It covers Schema-number widths, length checks, rule snapshots and Query
+providers; structure codec validation, limits, checked Schemas, missing
+directions, error propagation, recursion and collection; and reproducible
+generation, nesting, configuration snapshots and Core configuration results.
+Its `--allocator` mode injects Lua allocation failures across these
+operations. CTest also runs `examples/generate.lua`.
 
 ## Format composition implementation
 

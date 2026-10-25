@@ -184,8 +184,7 @@ static void* new_snapshot(lua_State* L, size_t size, const char* metatable, int*
     return self;
 }
 
-/* Reads the length rule fields of the table at `rule` into `entry`. */
-static void parse_entry(lua_State* L, int rule, int references, tlv_schema_entry_t* entry) {
+void opentlv_lua_schema_entry(lua_State* L, int rule, int references, tlv_schema_entry_t* entry) {
     field(L, rule, "tag");
     luaL_checktype(L, -1, LUA_TSTRING);
     size_t      size;
@@ -224,7 +223,7 @@ static int schema_new(lua_State* L) {
             lua_rawgeti(L, list, (int)i + 1);
             luaL_checktype(L, -1, LUA_TTABLE);
             int rule = lua_gettop(L);
-            parse_entry(L, rule, references, &entries[i]);
+            opentlv_lua_schema_entry(L, rule, references, &entries[i]);
             rules[i].entry = &entries[i];
             rules[i].min_occurs = number_option(L, rule, "min_occurs", 0, 0);
             rules[i].max_occurs = number_option(L, rule, "max_occurs", SIZE_MAX, 1);
@@ -457,6 +456,21 @@ static int checked_schema(lua_State* L) {
     return 1;
 }
 
+const tlv_structure_schema_t* opentlv_lua_check_structure_schema(lua_State* L, int index) {
+    if (index < 0 && index > LUA_REGISTRYINDEX) index = lua_gettop(L) + index + 1;
+    if (lua_getmetatable(L, index)) {
+        luaL_getmetatable(L, CHECKED_SCHEMA_MT);
+        int checked = lua_rawequal(L, -1, -2);
+        lua_pop(L, 2);
+        if (checked) {
+            lua_checked_schema_t* self = (lua_checked_schema_t*)lua_touserdata(L, index);
+            if (!self->checked.schema) luaL_error(L, "schema has been collected");
+            return self->checked.schema;
+        }
+    }
+    return &check_schema(L, index)->schema;
+}
+
 /* opentlv.length_schema(rules) snapshots per-tag length rules. */
 static int length_schema_new(lua_State* L) {
     int                  references;
@@ -468,7 +482,7 @@ static int length_schema_new(lua_State* L) {
     for (size_t i = 0; i < count; ++i) {
         lua_rawgeti(L, 1, (int)i + 1);
         luaL_checktype(L, -1, LUA_TTABLE);
-        parse_entry(L, lua_gettop(L), references, &entries[i]);
+        opentlv_lua_schema_entry(L, lua_gettop(L), references, &entries[i]);
         lua_pop(L, 1);
     }
     self->schema.entries = entries;

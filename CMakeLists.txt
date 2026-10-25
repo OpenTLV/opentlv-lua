@@ -37,6 +37,8 @@ add_library(opentlv_lua MODULE
     src/error.h
     src/format.c
     src/format.h
+    src/generator.c
+    src/generator.h
     src/formats/fixed.c
     src/formats/compose.c
     src/reader.c
@@ -270,6 +272,14 @@ if(OPENTLV_BUILD_LUA_TESTS)
         set_tests_properties(Integration_lua_document_query_schema
             Integration_lua_document_query_schema_allocator PROPERTIES
             LABELS "integration;lua" ENVIRONMENT "${_lua_test_environment}")
+        add_test(NAME Integration_lua_codec_generator
+            COMMAND ${OPENTLV_LUA_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests/codec_generator_spec.lua")
+        add_test(NAME Integration_lua_codec_generator_allocator
+            COMMAND ${OPENTLV_LUA_EXECUTABLE}
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/codec_generator_spec.lua" --allocator)
+        set_tests_properties(Integration_lua_codec_generator
+            Integration_lua_codec_generator_allocator PROPERTIES
+            LABELS "integration;lua" ENVIRONMENT "${_lua_test_environment}")
         add_test(NAME Integration_lua_nfc_type2
             COMMAND ${OPENTLV_LUA_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests/nfc_type2.lua")
         set_tests_properties(Integration_lua_nfc_type2 PROPERTIES
@@ -305,6 +315,11 @@ if(OPENTLV_BUILD_LUA_TESTS)
         set_tests_properties(Integration_example_lua_audit PROPERTIES
             LABELS "integration;examples;lua" ENVIRONMENT "${_lua_test_environment}"
             PASS_REGULAR_EXPRESSION "Hello, audited world!")
+        add_test(NAME Integration_example_lua_generate
+            COMMAND ${OPENTLV_LUA_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/examples/generate.lua")
+        set_tests_properties(Integration_example_lua_generate PROPERTIES
+            LABELS "integration;examples;lua" ENVIRONMENT "${_lua_test_environment}"
+            PASS_REGULAR_EXPRESSION "Hello, generated world!")
     else()
         message(STATUS "lua interpreter not found; skipping the Lua binding examples.")
     endif()

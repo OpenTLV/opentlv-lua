@@ -30,6 +30,7 @@
 #include "compat.h"
 #include "error.h"
 #include "format.h"
+#include "generator.h"
 #include "query.h"
 #include "program.h"
 #include "document.h"
@@ -66,6 +67,7 @@ int luaopen_opentlv__core(lua_State* L) {
     opentlv_lua_open_visitor(L, module_index);
     opentlv_lua_open_query(L, module_index);
     opentlv_lua_open_program(L, module_index);
+    opentlv_lua_open_generator(L, module_index);
 #if OPENTLV_DOCUMENT
     opentlv_lua_open_document(L, module_index);
 #endif
