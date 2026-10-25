@@ -5,6 +5,7 @@
 #include "common.h"
 #include "error.h"
 #include "format.h"
+#include "program.h"
 #include "query.h"
 
 #include <limits.h>
@@ -13,24 +14,23 @@
 #define DOCUMENT_MT "opentlv.Document"
 #define NODE_MT "opentlv.Node"
 
-typedef struct node_handle node_handle_t;
 typedef struct {
     tlv_document_t* document;
     int             format_ref;
-    node_handle_t*  handles;
-    int             query_active;
+    /* Advanced by applied Query edits, which retire every earlier handle. */
+    uint64_t generation;
+    int      query_active;
 } document_t;
 
-/* The list tracks borrowed handles, never owns nodes or mirrors their tree.
- * Each handle roots its Document; __gc unlinks before releasing that root. */
-struct node_handle {
-    tlv_node_t*    node;
-    document_t*    owner;
-    int            owner_ref;
-    int            affected;
-    node_handle_t* next;
-    node_handle_t* previous;
-};
+/* A borrowed node address checked against Core's never-reused identity. The
+ * retirement epoch tells when the address may be stale; only then is the
+ * identity looked up again. Each handle roots its Document. */
+typedef struct {
+    tlv_node_t* node;
+    document_t* owner;
+    int         owner_ref;
+    uint64_t    identity, epoch, generation;
+} node_handle_t;
 
 static document_t* check_document(lua_State* L, int arg) {
     document_t* self = (document_t*)luaL_checkudata(L, arg, DOCUMENT_MT);
@@ -40,17 +40,23 @@ static document_t* check_document(lua_State* L, int arg) {
 
 static node_handle_t* check_node(lua_State* L, int arg) {
     node_handle_t* self = (node_handle_t*)luaL_checkudata(L, arg, NODE_MT);
-    if (!self->node || !self->owner || !self->owner->document)
-        luaL_argerror(L, arg, "node has been invalidated");
-    return self;
+    document_t*    owner = self->owner;
+    if (self->node && owner && owner->document && self->generation == owner->generation) {
+        uint64_t epoch = tlv_document_retire_epoch(owner->document);
+        if (epoch == self->epoch) return self;
+        if (tlv_document_node_identity(owner->document, self->node) == self->identity) {
+            self->epoch = epoch;
+            return self;
+        }
+    }
+    self->node = NULL;
+    luaL_argerror(L, arg, "node has been invalidated");
+    return NULL;
 }
 
-static int push_node(lua_State* L, int owner_index, tlv_node_t* node) {
-    if (!node) {
-        lua_pushnil(L);
-        return 1;
-    }
-    document_t*    owner = check_document(L, owner_index);
+/* Allocates and roots a handle before `node` is known, so a mutation can fill
+ * it without a Lua allocation after the native edit. */
+static node_handle_t* new_handle(lua_State* L, int owner_index, document_t* owner) {
     node_handle_t* self = (node_handle_t*)lua_newuserdata(L, sizeof(*self));
     *self = (node_handle_t){0};
     self->owner_ref = LUA_NOREF;
@@ -59,22 +65,46 @@ static int push_node(lua_State* L, int owner_index, tlv_node_t* node) {
     lua_pushvalue(L, owner_index);
     self->owner_ref = luaL_ref(L, LUA_REGISTRYINDEX);
     self->owner = owner;
+    return self;
+}
+
+static void bind_handle(node_handle_t* self, tlv_node_t* node) {
     self->node = node;
-    self->next = owner->handles;
-    if (self->next) self->next->previous = self;
-    owner->handles = self;
+    self->identity = tlv_node_identity(node);
+    self->epoch = tlv_document_retire_epoch(self->owner->document);
+    self->generation = self->owner->generation;
+}
+
+static int push_node(lua_State* L, int owner_index, tlv_node_t* node) {
+    if (!node) {
+        lua_pushnil(L);
+        return 1;
+    }
+    document_t* owner = check_document(L, owner_index);
+    bind_handle(new_handle(L, owner_index, owner), node);
     return 1;
+}
+
+/* Pushes an owning Document for `format_index` before its native tree exists. */
+static document_t* new_document(lua_State* L, int format_index) {
+    document_t* self = (document_t*)lua_newuserdata(L, sizeof(*self));
+    *self = (document_t){0};
+    self->format_ref = LUA_NOREF;
+    luaL_getmetatable(L, DOCUMENT_MT);
+    lua_setmetatable(L, -2);
+    lua_pushvalue(L, format_index);
+    self->format_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+    return self;
 }
 
 tlv_document_t* opentlv_lua_document_native(lua_State* L, int index) {
     return check_document(L, index)->document;
 }
+tlv_document_t** opentlv_lua_document_push_owner(lua_State* L, int format_index) {
+    return &new_document(L, format_index)->document;
+}
 void opentlv_lua_document_invalidate(lua_State* L, int index) {
-    document_t* owner = check_document(L, index);
-    for (node_handle_t* handle = owner->handles; handle; handle = handle->next) {
-        handle->node = NULL;
-        handle->affected = 0;
-    }
+    ++check_document(L, index)->generation;
 }
 void opentlv_lua_document_query_guard(lua_State* L, int index, int begin) {
     document_t* owner = check_document(L, index);
@@ -91,28 +121,42 @@ int opentlv_lua_document_push_node(lua_State* L, int document_index, tlv_node_t*
     return push_node(L, document_index, node);
 }
 
-static int node_identity(lua_State* L) {
-    uint64_t identity = tlv_node_identity(check_node(L, 1)->node);
+static int push_u64(lua_State* L, uint64_t value) {
 #if LUA_VERSION_NUM >= 503
-    if (identity > (uint64_t)LUA_MAXINTEGER) return opentlv_lua_raise(L, TLV_ERR_NATIVE_SIZE, 0, 0);
-    lua_pushinteger(L, (lua_Integer)identity);
+    if (value > (uint64_t)LUA_MAXINTEGER) return opentlv_lua_raise(L, TLV_ERR_NATIVE_SIZE, 0, 0);
+    lua_pushinteger(L, (lua_Integer)value);
 #else
-    lua_Number value = (lua_Number)identity;
-    if ((uint64_t)value != identity) return opentlv_lua_raise(L, TLV_ERR_NATIVE_SIZE, 0, 0);
-    lua_pushnumber(L, value);
+    lua_Number number = (lua_Number)value;
+    if ((uint64_t)number != value) return opentlv_lua_raise(L, TLV_ERR_NATIVE_SIZE, 0, 0);
+    lua_pushnumber(L, number);
 #endif
+    return 1;
+}
+
+static int node_identity(lua_State* L) {
+    return push_u64(L, tlv_node_identity(check_node(L, 1)->node));
+}
+
+static int node_source_location(lua_State* L) {
+    tlv_document_source_location_t location = tlv_node_source_location(check_node(L, 1)->node);
+    if (!location.has_offset && !location.has_header_size) {
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_newtable(L);
+    if (location.has_offset) {
+        lua_pushinteger(L, (lua_Integer)location.offset);
+        lua_setfield(L, -2, "offset");
+    }
+    if (location.has_header_size) {
+        lua_pushinteger(L, (lua_Integer)location.header_size);
+        lua_setfield(L, -2, "header_size");
+    }
     return 1;
 }
 
 static int node_gc(lua_State* L) {
     node_handle_t* self = (node_handle_t*)luaL_checkudata(L, 1, NODE_MT);
-    if (self->owner) {
-        if (self->previous)
-            self->previous->next = self->next;
-        else
-            self->owner->handles = self->next;
-        if (self->next) self->next->previous = self->previous;
-    }
     self->owner = NULL;
     self->node = NULL;
     luaL_unref(L, LUA_REGISTRYINDEX, self->owner_ref);
@@ -123,33 +167,11 @@ static int node_gc(lua_State* L) {
 static int document_gc(lua_State* L) {
     document_t* self = (document_t*)luaL_checkudata(L, 1, DOCUMENT_MT);
     if (self->query_active) return opentlv_lua_raise(L, TLV_ERR_INVALID_STATE, 0, 0);
-    for (node_handle_t* handle = self->handles; handle; handle = handle->next) handle->node = NULL;
     tlv_document_free(self->document);
     self->document = NULL;
     luaL_unref(L, LUA_REGISTRYINDEX, self->format_ref);
     self->format_ref = LUA_NOREF;
     return 0;
-}
-
-/* Mark while native ancestors still exist; commit only after successful edits.
- * Failed mutations leave every handle usable, just like the C API. */
-static void mark_handles(document_t* owner, tlv_node_t* root, int include_root) {
-    for (node_handle_t* handle = owner->handles; handle; handle = handle->next) {
-        handle->affected = 0;
-        tlv_node_t* node = handle->node;
-        if (node && !include_root) node = tlv_node_parent(node);
-        for (; node; node = tlv_node_parent(node)) {
-            if (node == root) {
-                handle->affected = 1;
-                break;
-            }
-        }
-    }
-}
-
-static void invalidate_marked(document_t* owner) {
-    for (node_handle_t* handle = owner->handles; handle; handle = handle->next)
-        if (handle->affected) handle->node = NULL;
 }
 
 static int document_new(lua_State* L) {
@@ -173,13 +195,7 @@ static int document_new(lua_State* L) {
         options.retain_source_locations = lua_toboolean(L, -1);
         lua_pop(L, 1);
     }
-    document_t* self = (document_t*)lua_newuserdata(L, sizeof(*self));
-    *self = (document_t){0};
-    self->format_ref = LUA_NOREF;
-    luaL_getmetatable(L, DOCUMENT_MT);
-    lua_setmetatable(L, -2);
-    lua_pushvalue(L, 2);
-    self->format_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+    document_t*             self = new_document(L, 2);
     tlv_reader_diagnostic_t offset = {0};
     code = data ? tlv_document_parse(data, length, &options, &self->document, &offset)
                 : tlv_document_create(&options, &self->document);
@@ -219,6 +235,19 @@ static int document_find(lua_State* L) {
     return push_node(L, 1, find_path(L, self, 2));
 }
 
+/* find_child(binary_tag, parent?) */
+static int document_find_child(lua_State* L) {
+    document_t*    self = check_document(L, 1);
+    size_t         size;
+    const uint8_t* tag = (const uint8_t*)luaL_checklstring(L, 2, &size);
+    tlv_node_t*    parent = NULL;
+    if (!lua_isnoneornil(L, 3)) {
+        parent = resolve_node(L, self, 3);
+        if (!parent) return luaL_argerror(L, 3, "parent was not found");
+    }
+    return push_node(L, 1, tlv_document_find(self->document, parent, tlv_tag(tag, size)));
+}
+
 static int document_first(lua_State* L) {
     return push_node(L, 1, tlv_document_first(check_document(L, 1)->document));
 }
@@ -228,47 +257,105 @@ static int document_count(lua_State* L) {
     return 1;
 }
 
-static int document_query(lua_State* L) {
-    document_t*         self = check_document(L, 1);
-    tlv_query_t         scratch;
-    const tlv_query_t*  query = opentlv_lua_check_query(L, 2, &scratch);
-    tlv_query_matcher_t matcher;
-    tlv_result_t        code = tlv_query_matcher_init(&matcher, query);
-    if (code != TLV_OK) return opentlv_lua_raise(L, code, 0, 0);
-    lua_newtable(L);
-    int         count = 0;
-    size_t      depth = 0;
-    tlv_node_t* node = tlv_document_first(self->document);
-    while (node) {
-        tlv_tag_t tag = tlv_node_tag(node);
-        if (tlv_query_matcher_visit(&matcher, &tag, depth)) {
-            if (count == INT_MAX) return opentlv_lua_raise(L, TLV_ERR_LIMIT, 0, 0);
-            push_node(L, 1, node);
-            lua_rawseti(L, -2, ++count);
-        }
-        tlv_node_t* child = tlv_node_first_child(node);
-        if (child) {
-            node = child;
-            ++depth;
-            continue;
-        }
-        while (node && !tlv_node_next(node)) {
-            node = tlv_node_parent(node);
-            if (depth) --depth;
-        }
-        if (node) node = tlv_node_next(node);
+static int document_revision(lua_State* L) {
+    return push_u64(L, tlv_document_revision(check_document(L, 1)->document));
+}
+
+typedef struct {
+    lua_State*  L;
+    tlv_node_t* node;
+    int         invoke, document, target, error, failed, stopped, count;
+} visit_t;
+
+/* Node projection and the callback (or result append) run under pcall: no Lua
+ * error unwinds through tlv_document_query_visit(). Arguments are the visit,
+ * the Document and the callback or result table. */
+static int visit_invoke(lua_State* L) {
+    visit_t* visit = (visit_t*)lua_touserdata(L, 1);
+    if (lua_isfunction(L, 3)) {
+        lua_pushvalue(L, 3);
+        push_node(L, 2, visit->node);
+        lua_call(L, 1, 1);
+        return 1;
     }
+    if (visit->count == INT_MAX) return opentlv_lua_raise(L, TLV_ERR_LIMIT, 0, 0);
+    push_node(L, 2, visit->node);
+    lua_rawseti(L, 3, visit->count + 1);
+    return 0;
+}
+
+static tlv_visit_result_t visit_node(tlv_node_t* node, void* context) {
+    visit_t*   visit = (visit_t*)context;
+    lua_State* L = visit->L;
+    visit->node = node;
+    lua_pushvalue(L, visit->invoke);
+    lua_pushlightuserdata(L, visit);
+    lua_pushvalue(L, visit->document);
+    lua_pushvalue(L, visit->target);
+    if (lua_pcall(L, 3, 1, 0) != LUA_OK) {
+        lua_replace(L, visit->error);
+        visit->failed = 1;
+        return TLV_VISIT_ERROR;
+    }
+    ++visit->count;
+    visit->stopped = lua_isboolean(L, -1) && !lua_toboolean(L, -1);
+    lua_pop(L, 1);
+    return visit->stopped ? TLV_VISIT_STOP : TLV_VISIT_CONTINUE;
+}
+
+/* Visits path matches through tlv_document_query_visit(); `target` is a callback
+ * or a result table. Mutation and release are rejected while it runs. */
+static visit_t visit_matches(lua_State* L, document_t* self, int query_arg, int target) {
+    tlv_query_t        scratch;
+    const tlv_query_t* query = opentlv_lua_check_query(L, query_arg, &scratch);
+    luaL_checkstack(L, 8, "Document visit stack");
+    visit_t visit = {L, NULL, 0, 1, target, 0, 0, 0, 0};
+    lua_pushcfunction(L, visit_invoke);
+    visit.invoke = lua_gettop(L);
+    lua_pushnil(L);
+    visit.error = lua_gettop(L);
+    tlv_query_diagnostic_t diagnostic;
+    ++self->query_active;
+    tlv_result_t code =
+        tlv_document_query_visit(self->document, query, visit_node, &visit, &diagnostic);
+    --self->query_active;
+    if (visit.failed) {
+        lua_pushvalue(L, visit.error);
+        lua_error(L);
+    }
+    if (code != TLV_OK) {
+        opentlv_lua_push_query_error(L, code, &diagnostic);
+        lua_error(L);
+    }
+    return visit;
+}
+
+static int document_query(lua_State* L) {
+    document_t* self = check_document(L, 1);
+    lua_settop(L, 2);
+    lua_newtable(L);
+    visit_matches(L, self, 2, 3);
+    lua_settop(L, 3);
     return 1;
+}
+
+/* visit(path_or_query, callback) -> visited, stopped */
+static int document_visit(lua_State* L) {
+    document_t* self = check_document(L, 1);
+    luaL_checktype(L, 3, LUA_TFUNCTION);
+    lua_settop(L, 3);
+    visit_t visit = visit_matches(L, self, 2, 3);
+    lua_pushinteger(L, visit.count);
+    lua_pushboolean(L, visit.stopped);
+    return 2;
 }
 
 static int set_value(lua_State* L, document_t* owner, tlv_node_t* node, int arg) {
     if (owner->query_active) return opentlv_lua_raise(L, TLV_ERR_INVALID_STATE, 0, 0);
     size_t         length;
     const uint8_t* value = (const uint8_t*)luaL_checklstring(L, arg, &length);
-    mark_handles(owner, node, 0);
-    tlv_result_t code = tlv_node_set_value(node, value, length);
+    tlv_result_t   code = tlv_node_set_value(node, value, length);
     if (code != TLV_OK) return opentlv_lua_raise(L, code, 0, 0);
-    invalidate_marked(owner);
     lua_pushboolean(L, 1);
     return 1;
 }
@@ -291,8 +378,6 @@ static int document_erase(lua_State* L) {
         lua_pushboolean(L, 0);
         return 1;
     }
-    mark_handles(self, node, 1);
-    invalidate_marked(self);
     tlv_node_erase(node);
     lua_pushboolean(L, 1);
     return 1;
@@ -317,21 +402,13 @@ static int document_insert(lua_State* L) {
     }
     /* Prepare the returned handle before mutation, including its Lua root. */
     lua_settop(L, 5);
-    node_handle_t* handle = (node_handle_t*)lua_newuserdata(L, sizeof(*handle));
-    *handle = (node_handle_t){0};
-    handle->owner_ref = LUA_NOREF;
-    luaL_getmetatable(L, NODE_MT);
-    lua_setmetatable(L, -2);
-    lua_pushvalue(L, 1);
-    handle->owner_ref = luaL_ref(L, LUA_REGISTRYINDEX);
-    tlv_tag_t    tag = {tag_data, tag_size};
-    tlv_result_t code =
-        tlv_document_insert(self->document, parent, before, tag, value, length, &handle->node);
+    node_handle_t* handle = new_handle(L, 1, self);
+    tlv_tag_t      tag = {tag_data, tag_size};
+    tlv_node_t*    node = NULL;
+    tlv_result_t   code =
+        tlv_document_insert(self->document, parent, before, tag, value, length, &node);
     if (code != TLV_OK) return opentlv_lua_raise(L, code, 0, 0);
-    handle->owner = self;
-    handle->next = self->handles;
-    if (handle->next) handle->next->previous = handle;
-    self->handles = handle;
+    bind_handle(handle, node);
     return 1;
 }
 
@@ -412,19 +489,19 @@ static int node_set(lua_State* L) {
 static int node_erase(lua_State* L) {
     node_handle_t* self = check_node(L, 1);
     if (self->owner->query_active) return opentlv_lua_raise(L, TLV_ERR_INVALID_STATE, 0, 0);
-    tlv_node_t* node = self->node;
-    mark_handles(self->owner, node, 1);
-    invalidate_marked(self->owner);
-    tlv_node_erase(node);
+    tlv_node_erase(self->node);
     return 0;
 }
 
 void opentlv_lua_open_document(lua_State* L, int module_index) {
     static const opentlv_lua_method_t document_methods[] = {{"close", document_gc},
                                                             {"find", document_find},
+                                                            {"find_child", document_find_child},
                                                             {"query", document_query},
+                                                            {"visit", document_visit},
                                                             {"first", document_first},
                                                             {"count", document_count},
+                                                            {"revision", document_revision},
                                                             {"set", document_set},
                                                             {"insert", document_insert},
                                                             {"erase", document_erase},
@@ -432,6 +509,7 @@ void opentlv_lua_open_document(lua_State* L, int module_index) {
                                                             {NULL, NULL}};
     static const opentlv_lua_method_t node_methods[] = {{"tag", node_tag},
                                                         {"identity", node_identity},
+                                                        {"source_location", node_source_location},
                                                         {"value", node_value},
                                                         {"is_constructed", node_constructed},
                                                         {"first_child", node_first_child},

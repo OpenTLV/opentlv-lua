@@ -182,6 +182,21 @@ void opentlv_lua_codec_push(lua_State* L, const tlv_codec_t* native,
     codec->rep = rep;
 }
 
+int opentlv_lua_codec_query(lua_State* L, int index, tlv_query_codec_adapter_t* adapter,
+                            size_t* scratch_size) {
+    lua_codec_t* codec = luaL_checkudata(L, index, CODEC_MT);
+    if (codec->custom) return 0;
+    if (codec->rep == &number_rep)
+        adapter->representation = TLV_QUERY_CODEC_UNSIGNED;
+    else if (codec->rep == &text_rep)
+        adapter->representation = TLV_QUERY_CODEC_UTF8;
+    else if (!opentlv_lua_codec_builtin_query(codec->rep, &adapter->representation))
+        return 0;
+    adapter->codec = &codec->codec;
+    *scratch_size = codec->rep->size;
+    return 1;
+}
+
 void opentlv_lua_codec_add(lua_State* L, const char* name, const tlv_codec_t* native,
                            const opentlv_lua_codec_rep_t* rep) {
     opentlv_lua_codec_push(L, native, rep);

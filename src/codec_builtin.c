@@ -1116,3 +1116,17 @@ void opentlv_lua_codec_builtins(lua_State* L) {
     lua_setfield(L, -2, "emv");
 #endif
 }
+
+int opentlv_lua_codec_builtin_query(const opentlv_lua_codec_rep_t*    rep,
+                                    tlv_query_codec_representation_t* representation) {
+    if (rep == &rep_i64) *representation = TLV_QUERY_CODEC_SIGNED;
+#if OPENTLV_EMV
+    else if (rep == &rep_u64)
+        *representation = TLV_QUERY_CODEC_UNSIGNED;
+#endif
+    else if (rep == &rep_value)
+        *representation = TLV_QUERY_CODEC_UTF8;
+    else
+        return 0;
+    return 1;
+}

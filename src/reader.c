@@ -4,6 +4,7 @@
 #include "reader.h"
 #include "common.h"
 #include "error.h"
+#include "document.h"
 #include "format.h"
 #include "source.h"
 #include "visitor.h"
@@ -31,13 +32,19 @@ typedef struct tlv_lua_reader {
 } tlv_lua_reader_t;
 
 /* Same ownership as tlv_lua_reader_t, plus caller-owned frame storage the C
- * Tree Reader borrows; __gc is installed before the frames are allocated. */
+ * Tree Reader borrows; __gc is installed before the frames are allocated.
+ * `current` is the item the last next() published, kept as a Document builder
+ * root until the next pull, skip, visit or input replacement. `building` is
+ * set while a Document builder owns the cursor. */
 typedef struct lua_tree_reader {
     tlv_tree_reader_t reader;
     tlv_tree_frame_t* frames;
     int               data_ref;
     int               format_ref;
     int               busy;
+    int               building;
+    int               has_current;
+    tlv_tree_item_t   current;
 } lua_tree_reader_t;
 
 static void check_idle(lua_State* L, int data_ref, int busy) {
@@ -54,6 +61,15 @@ static tlv_lua_reader_t* check_reader(lua_State* L, int arg) {
 static lua_tree_reader_t* check_tree_reader(lua_State* L, int arg) {
     lua_tree_reader_t* self = (lua_tree_reader_t*)luaL_checkudata(L, arg, TREE_READER_MT);
     check_idle(L, self->data_ref, self->busy);
+    return self;
+}
+
+/* Pulls, skips and visits move the cursor, which an active Document builder
+ * owns; they also end the current-item selection. */
+static lua_tree_reader_t* check_tree_cursor(lua_State* L, int arg) {
+    lua_tree_reader_t* self = check_tree_reader(L, arg);
+    if (self->building) opentlv_lua_raise(L, TLV_ERR_INVALID_STATE, 0, 0);
+    self->has_current = 0;
     return self;
 }
 
@@ -285,16 +301,18 @@ static int tree_next_impl(lua_State* L, lua_tree_reader_t* self) {
         return 1;
     }
     if (code != TLV_OK) return opentlv_lua_raise_reader_error(L, code, &diag);
+    self->current = item;
+    self->has_current = 1;
     return push_item(L, &item);
 }
 
 static int tree_next(lua_State* L) {
-    return tree_next_impl(L, check_tree_reader(L, 1));
+    return tree_next_impl(L, check_tree_cursor(L, 1));
 }
 
 /* Generic-for form, as for Reader. */
 static int tree_call(lua_State* L) {
-    return tree_next_impl(L, check_tree_reader(L, 1));
+    return tree_next_impl(L, check_tree_cursor(L, 1));
 }
 
 static const char* event_kind_name(tlv_tree_event_kind_t kind) {
@@ -308,7 +326,7 @@ static const char* event_kind_name(tlv_tree_event_kind_t kind) {
 /* tree_reader:next_event() -> {kind, depth, offset, skipped, ...}; begin and
  * element events also carry the element fields and "constructed". */
 static int tree_next_event(lua_State* L) {
-    lua_tree_reader_t*      self = check_tree_reader(L, 1);
+    lua_tree_reader_t*      self = check_tree_cursor(L, 1);
     tlv_tree_event_t        event;
     tlv_reader_diagnostic_t diag;
     tlv_reader_diagnostic_init(&diag);
@@ -339,7 +357,7 @@ static int tree_next_event(lua_State* L) {
 }
 
 static int tree_skip_subtree(lua_State* L) {
-    lua_tree_reader_t* self = check_tree_reader(L, 1);
+    lua_tree_reader_t* self = check_tree_cursor(L, 1);
     tlv_result_t       code = tlv_tree_reader_skip_subtree(&self->reader);
     if (code != TLV_OK) return opentlv_lua_raise(L, code, 0, 0);
     return 0;
@@ -387,12 +405,13 @@ static int tree_set_input(lua_State* L) {
     }
     luaL_unref(L, LUA_REGISTRYINDEX, self->data_ref);
     self->data_ref = ref;
+    self->has_current = 0;
     return 0;
 }
 
 /* tree_reader:visit(callback) -> visited, stopped; callback(element, depth). */
 static int tree_visit(lua_State* L) {
-    lua_tree_reader_t* self = check_tree_reader(L, 1);
+    lua_tree_reader_t* self = check_tree_cursor(L, 1);
     luaL_checktype(L, 2, LUA_TFUNCTION);
     tlv_lua_format_t* format = retained_format(L, self->format_ref);
     return opentlv_lua_visit_cursor(L, format, NULL, &self->reader, 2, &self->busy);
@@ -409,6 +428,113 @@ static int tree_gc(lua_State* L) {
     self->format_ref = LUA_NOREF;
     return 0;
 }
+
+#if OPENTLV_DOCUMENT
+#define DOCUMENT_BUILDER_MT "opentlv.DocumentBuilder"
+
+/* Owns one native builder and roots its Tree Reader until completion. */
+typedef struct lua_document_builder {
+    tlv_document_builder_t* builder;
+    lua_tree_reader_t*      reader;
+    int                     reader_ref;
+} lua_document_builder_t;
+
+static void release_builder(lua_State* L, lua_document_builder_t* self) {
+    if (self->builder) {
+        tlv_document_builder_free(self->builder);
+        self->builder = NULL;
+        self->reader->building = 0;
+    }
+    luaL_unref(L, LUA_REGISTRYINDEX, self->reader_ref);
+    self->reader_ref = LUA_NOREF;
+}
+
+static int builder_gc(lua_State* L) {
+    release_builder(L, (lua_document_builder_t*)luaL_checkudata(L, 1, DOCUMENT_BUILDER_MT));
+    return 0;
+}
+
+/* builder:consume() -> Document. NEED_MORE_DATA keeps the unfinished tree for
+ * set_input() on the reader; completion and terminal errors release it. */
+static int builder_consume(lua_State* L) {
+    lua_document_builder_t* self =
+        (lua_document_builder_t*)luaL_checkudata(L, 1, DOCUMENT_BUILDER_MT);
+    if (!self->builder) return opentlv_lua_raise(L, TLV_ERR_INVALID_STATE, 0, 0);
+    /* The owning Document exists before C transfers the tree into it. */
+    lua_rawgeti(L, LUA_REGISTRYINDEX, self->reader->format_ref);
+    tlv_document_t**        document = opentlv_lua_document_push_owner(L, lua_gettop(L));
+    tlv_reader_diagnostic_t diag;
+    tlv_reader_diagnostic_init(&diag);
+    tlv_result_t code = tlv_document_builder_consume(self->builder, document, &diag);
+    if (code == TLV_NEED_MORE_DATA) return opentlv_lua_raise_reader_error(L, code, &diag);
+    /* Raising copies the borrowed detail before the builder releases it. */
+    if (code != TLV_OK) {
+        opentlv_lua_push_reader_error(L, code, &diag);
+        release_builder(L, self);
+        return lua_error(L);
+    }
+    release_builder(L, self);
+    return 1;
+}
+
+/* tree_reader:document_builder(options) -> DocumentBuilder | nil. `subtree` is
+ * nil for the whole stream, "next" to pull the next item as root, or "current"
+ * for the item the last next() returned; "next" returns nil at the end. */
+static int tree_document_builder(lua_State* L) {
+    static const char* const roots[] = {"stream", "next", "current", NULL};
+    lua_tree_reader_t*       self = check_tree_reader(L, 1);
+    if (self->building) return opentlv_lua_raise(L, TLV_ERR_INVALID_STATE, 0, 0);
+    if (!lua_isnoneornil(L, 2)) luaL_checktype(L, 2, LUA_TTABLE);
+    lua_settop(L, 2);
+    int subtree = 0;
+    if (!lua_isnil(L, 2)) {
+        lua_getfield(L, 2, "subtree");
+        subtree = luaL_checkoption(L, -1, "stream", roots);
+        lua_pop(L, 1);
+    }
+    tlv_lua_format_t*      format = retained_format(L, self->format_ref);
+    tlv_document_options_t options;
+    tlv_result_t           code = tlv_document_options_init(&options, &format->format);
+    if (code != TLV_OK) return opentlv_lua_raise(L, code, 0, 0);
+    options.max_depth = opentlv_lua_size_option(L, 2, "max_depth", options.max_depth);
+    options.max_elements = opentlv_lua_size_option(L, 2, "max_elements", options.max_elements);
+    options.retain_source_locations =
+        opentlv_lua_boolean_option(L, 2, "retain_source_locations", 0);
+    if (subtree == 2 && !self->has_current)
+        return opentlv_lua_raise(L, TLV_ERR_INVALID_STATE, 0, 0);
+    lua_document_builder_t* builder = (lua_document_builder_t*)lua_newuserdata(L, sizeof(*builder));
+    builder->builder = NULL;
+    builder->reader = self;
+    builder->reader_ref = LUA_NOREF;
+    luaL_getmetatable(L, DOCUMENT_BUILDER_MT);
+    lua_setmetatable(L, -2);
+    lua_pushvalue(L, 1);
+    builder->reader_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+    tlv_tree_item_t root = self->current;
+    int             had_current = self->has_current;
+    self->has_current = 0;
+    if (subtree == 1) {
+        tlv_reader_diagnostic_t diag;
+        tlv_reader_diagnostic_init(&diag);
+        code = tlv_tree_reader_next_diag(&self->reader, &root, &diag);
+        if (code == TLV_END) {
+            lua_pushnil(L);
+            return 1;
+        }
+        if (code != TLV_OK) return opentlv_lua_raise_reader_error(L, code, &diag);
+    }
+    code = tlv_document_builder_create(&options, &self->reader, subtree ? &root : NULL,
+                                       &builder->builder);
+    if (code != TLV_OK) {
+        /* Creation does not move the cursor, so the root stays selectable. */
+        self->current = root;
+        self->has_current = subtree ? 1 : had_current;
+        return opentlv_lua_raise(L, code, 0, 0);
+    }
+    self->building = 1;
+    return 1;
+}
+#endif
 
 /* opentlv.tree_reader(data, format, options) -> TreeReader */
 static int l_tree_reader_new(lua_State* L) {
@@ -512,11 +638,22 @@ void opentlv_lua_open_reader(lua_State* L, int module_table_index) {
         {"set_input", tree_set_input},
         {"visit", tree_visit},
         {"format", tree_format},
+#if OPENTLV_DOCUMENT
+        {"document_builder", tree_document_builder},
+#endif
         {NULL, NULL},
     };
     opentlv_lua_open_source(L);
     opentlv_lua_new_type(L, OPENTLV_LUA_READER_MT, methods, reader_gc, NULL, reader_call);
     opentlv_lua_new_type(L, TREE_READER_MT, tree_methods, tree_gc, NULL, tree_call);
+#if OPENTLV_DOCUMENT
+    static const opentlv_lua_method_t builder_methods[] = {
+        {"consume", builder_consume},
+        {"close", builder_gc},
+        {NULL, NULL},
+    };
+    opentlv_lua_new_type(L, DOCUMENT_BUILDER_MT, builder_methods, builder_gc, NULL, NULL);
+#endif
 
     lua_pushcfunction(L, l_reader_new);
     lua_setfield(L, module_table_index, "reader");

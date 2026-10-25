@@ -201,6 +201,12 @@ references them. The current entries are:
   destination; `format:encode()` calls `tlv_format_encode()`, which they use.
 - `tlv_writer_copy_element`, which is `tlv_writer_write_element()` without
   diagnostics after the same checks.
+- `tlv_query_parse`, the NUL-terminated form of `tlv_query_parse_n()`. Lua
+  strings carry their length, so every path argument parses through
+  `tlv_query_parse_n()`, which also rejects embedded NUL.
+- `tlv_schema_check`, which `tlv_schema_prepare()` runs before keeping the
+  checked handle. Schemas are immutable snapshots, so `schema:check()` prepares
+  once and a separate definition-only check adds no operation.
 
 Patterns that match nothing in the pinned Core are reported, so stale entries
 are visible after a pin bump. Change the ignore list only for symbols the
@@ -242,6 +248,25 @@ completes `tlv/format.h`. Core coverage of the same pin is 166 of 215 symbols
 | `tlv/reader/visitor.h` | 2/2 | 1 | `visit()`, `visit_tree()`, `reader:visit()`, `tree_reader:visit()` |
 | `tlv/writer/writer.h` | 10/10 | 11 | `writer()`, `copy_encoded()`, `preserve()`, `encoded_size()` |
 | `tlv/writer/tree.h` | 10/10 | 4 | `tree_writer()`, `write_event()`, `measure_tree()`, `measure_events()` |
+
+Document, Query and Schema operations (#29) reference or ignore every symbol of
+`tlv/document/document.h`, `tlv/query/*.h`, `tlv/schema/schema.h` and
+`tlv/schema/constraint.h`. Core coverage of the same pin is 198 of 213 symbols
+(93.0 %) with 84 ignored:
+
+| Header | Referenced | Ignored | Lua API |
+| --- | ---: | ---: | --- |
+| `tlv/document/document.h` | 41/41 | 0 | `document()`, `revision()`, `find_child()`, `visit()`, Node identity checks, `source_location()`, `document_builder()`, Document Query results |
+| `tlv/query/query.h` | 9/9 | 1 | `query()`, `format()`, `visit()`, matcher `visit()` |
+| `tlv/query/program.h` | 31/31 | 0 | `query_program()`, `reset()`, `cause_name` |
+| `tlv/query/plan.h` | 2/2 | 0 | `query_plan_open()`, `plan_info()` |
+| `tlv/query/adapters.h` | 3/3 | 0 | codec providers |
+| `tlv/schema/schema.h` | 9/9 | 1 | `schema:check()`, `first`, `length_schema()`, `cause` |
+| `tlv/schema/constraint.h` | 3/3 | 0 | `value_constraint()` |
+
+`tlv/schema/number.h` and the Value codec headers belong to the codec work
+(#30); `tlv/definition.h`, `tlv_diagnostic_path_string` and
+`tlv_location_translate` remain for the final coverage review (#31).
 
 Run it locally from the repository root:
 
