@@ -32,6 +32,45 @@ int opentlv_lua_raise_writer_error(lua_State* L, tlv_result_t code,
     return lua_error(L);
 }
 
+static const char* region_name(tlv_region_t region) {
+    switch (region) {
+        case TLV_REGION_TAG: return "tag";
+        case TLV_REGION_LENGTH: return "length";
+        case TLV_REGION_VALUE: return "value";
+        case TLV_REGION_TRAILER: return "trailer";
+        default: return "header";
+    }
+}
+
+static void set_range(lua_State* L, const tlv_range_t* range, const char* name) {
+    if (!range->present) return;
+    lua_newtable(L);
+    opentlv_lua_codec_push_uint(L, range->offset);
+    lua_setfield(L, -2, "offset");
+    opentlv_lua_codec_push_uint(L, range->size);
+    lua_setfield(L, -2, "size");
+    lua_setfield(L, -2, name);
+}
+
+int opentlv_lua_raise_format_error(lua_State* L, tlv_result_t code, const char* operation,
+                                   const tlv_format_error_t* error) {
+    opentlv_lua_push_error(L, code, error && error->has_offset, error ? error->offset : 0);
+    lua_pushstring(L, operation);
+    lua_setfield(L, -2, "operation");
+    if (error) {
+        lua_pushstring(L, region_name(error->region));
+        lua_setfield(L, -2, "region");
+        if (error->has_required) {
+            opentlv_lua_codec_push_uint(L, error->required);
+            lua_setfield(L, -2, "required");
+        }
+        set_range(L, &error->tag, "tag_range");
+        set_range(L, &error->length, "length_range");
+        set_range(L, &error->value, "value_range");
+    }
+    return lua_error(L);
+}
+
 static int error_tostring(lua_State* L) {
     /* Error objects are plain tables with this metatable attached (see
      * opentlv_lua_push_diagnostic()), not userdata, so this is reached only as

@@ -180,6 +180,12 @@ references them. The current entries are:
   `tlv_diagnostic_init` and `tlv_diagnostic_set_location` only to shape binding
   errors. Diagnostic consumers such as the `*_string` lookups and
   `tlv_diagnostic_path_string` remain counted.
+- the decode, measure and encode callbacks (and `tlv_variable_is_constructed`)
+  that `tlv_fixed_format_init()`, `tlv_fields_format_init()`,
+  `tlv_tagged_fields_format_init()`, `tlv_tagged_binary_format_init()`,
+  `tlv_escaped_format_init()` and `tlv_variable_format_init()` install in a
+  descriptor. Core calls them through the descriptor, so Lua has no separate
+  path; the initializers themselves remain counted.
 
 Patterns that match nothing in the pinned Core are reported, so stale entries
 are visible after a pin bump. Change the ignore list only for symbols the
@@ -190,6 +196,23 @@ The first report, for Core `d87dcf96b270` (15 commits after 0.7.1), references
 (21.0 %). Builtins-specific parity is outside the coverage epic. The report
 reads the headers, not a build; official builds enable every Core component and
 builtin.
+
+Custom Format composition (#27) references or ignores every symbol of
+`tlv/field/*.h` and `tlv/formats/*.h`, and references all of `tlv/format.h`
+except `tlv_source_preserve()`, which belongs to source preservation in the
+streaming Reader and Writer work (#28). Core coverage of the same pin is 147 of 235
+symbols (62.6 %) with 62 ignored:
+
+| Header | Referenced | Ignored | Lua API |
+| --- | ---: | ---: | --- |
+| `tlv/field/fixed.h`, `tlv/field/variable.h`, `tlv/field/escaped.h` | 10/10 | 0 | `formats.compose()` field adapters |
+| `tlv/field/packed.h` | 2/2 | 0 | `fields.read_packed()`, `fields.write_packed()` |
+| `tlv/format.h` | 7/8 | 0 | Format methods, `formats.packed()`, `constructed` |
+| `tlv/formats/compose.h` | 3/3 | 12 | `formats.compose()` |
+| `tlv/formats/escaped.h` | 1/1 | 3 | `formats.compose()` |
+| `tlv/formats/fixed.h` | 1/1 | 0 | `formats.fixed()`, `formats.compose()` |
+| `tlv/formats/packed.h` | 4/4 | 0 | `formats.packed()` |
+| `tlv/formats/variable.h` | 2/2 | 4 | `formats.compose()` |
 
 Run it locally from the repository root:
 

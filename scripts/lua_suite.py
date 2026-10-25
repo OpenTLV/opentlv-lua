@@ -28,6 +28,7 @@ EXPECTED_TESTS = {
     "Integration_lua_components",
     "Integration_example_lua_quick_start",
     "Integration_example_lua_parse",
+    "Integration_example_lua_compose",
 }
 
 

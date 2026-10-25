@@ -29,7 +29,9 @@
  * copy of the corresponding extern const global; for opentlv.formats.fixed()
  * it is initialized by tlv_fixed_format_init() with `fixed_config` (embedded
  * in this same userdata, so its address stays valid for exactly as long as
- * the format object itself does) as its context. */
+ * the format object itself does) as its context. Composed formats
+ * (formats/compose.c) are larger userdata blocks that begin with this struct
+ * and embed their own configuration and identifier tables. */
 typedef struct tlv_lua_format {
     tlv_format_t       format;
     tlv_fixed_format_t fixed_config;
@@ -37,8 +39,9 @@ typedef struct tlv_lua_format {
     const char*        name;
 } tlv_lua_format_t;
 
-/* Registers the "opentlv.Format" metatable, builds module_table["formats"]
- * and stashes BER (or nil when disabled) under OPENTLV_LUA_DEFAULT_FORMAT_KEY.
+/* Registers the "opentlv.Format" metatable with the canonical Format
+ * operations, builds module_table["formats"] and module_table["fields"], and
+ * stashes BER (or nil when disabled) under OPENTLV_LUA_DEFAULT_FORMAT_KEY.
  * module_table must be on top of the stack; the stack is unchanged on
  * return. Call once from luaopen_opentlv__core(). */
 void opentlv_lua_open_format(lua_State* L, int module_table_index);
@@ -52,6 +55,8 @@ tlv_lua_format_t* opentlv_lua_check_format(lua_State* L, int arg);
 void opentlv_lua_register_builtin(lua_State* L, tlv_format_t format_value, int use_der_validation,
                                   const char* name);
 void opentlv_lua_register_fixed(lua_State* L);
+/* Adds compose() and packed() (formats/compose.c). */
+void opentlv_lua_register_compose(lua_State* L);
 #if OPENTLV_FORMAT_BER
 void opentlv_lua_register_ber(lua_State* L);
 #endif
@@ -75,5 +80,9 @@ void opentlv_lua_register_nfc_type2(lua_State* L);
 #if OPENTLV_LLDP
 void opentlv_lua_register_lldp(lua_State* L);
 #endif
+
+/* Sets module_table["fields"] to the packed bit-field functions
+ * (formats/compose.c); the stack is unchanged on return. */
+void opentlv_lua_open_fields(lua_State* L, int module_table_index);
 
 #endif /* OPENTLV_LUA_FORMAT_H */

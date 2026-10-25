@@ -8,6 +8,7 @@
 
 #include <tlv/result.h>
 #include <tlv/codec/diagnostic.h>
+#include <tlv/format.h>
 #include <tlv/reader/reader.h>
 #include <tlv/writer/writer.h>
 
@@ -59,6 +60,13 @@ int opentlv_lua_raise_reader_error(lua_State* L, tlv_result_t code,
 /* Copies borrowed writer diagnostic fields into the raised Lua error table. */
 int opentlv_lua_raise_writer_error(lua_State* L, tlv_result_t code,
                                    const tlv_writer_diagnostic_t* diag);
+
+/* Raises a Format operation failure: "operation" ("decode", "measure" or
+ * "encode") and, when `error` is non-NULL, the Format's own detail: "offset",
+ * "region", "required" and the known "tag_range", "length_range" and
+ * "value_range" as {offset, size} tables. */
+int opentlv_lua_raise_format_error(lua_State* L, tlv_result_t code, const char* operation,
+                                   const tlv_format_error_t* error);
 
 /* Push owned conversion detail without duplicating the enclosing common diagnostic. */
 void opentlv_lua_push_codec_detail(lua_State* L, const tlv_codec_detail_t* detail);

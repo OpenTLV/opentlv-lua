@@ -36,6 +36,7 @@ platforms, Linux LuaJIT, shared Core, installed-package consumption and sanitize
 | Tests | Lua-owned behavior |
 | --- | --- |
 | `module_spec.lua`, `reader_spec.lua`, `format_spec.lua`, `error_spec.lua` | Public API, module identity, argument conversion and diagnostic tables |
+| `compose_spec.lua` | Composed and packed Formats, Format operations, packed bit fields, configuration snapshots and retained lifetimes |
 | `version.lua` | Both public version forms match generated/installed binding metadata; run by CTest, Main smoke, LuaRocks and extracted package checks |
 | `codec_spec.lua`, `schema_spec.lua`, `writer_spec.lua`, `visitor_spec.lua` | Conversion, callbacks, retained inputs, ownership, GC and error propagation |
 | `program_spec.lua`, `query_document_spec.lua` | Query/Document userdata, continuations, finalizers, mutation and lifetime |
@@ -44,7 +45,7 @@ platforms, Linux LuaJIT, shared Core, installed-package consumption and sanitize
 | `components.lua`, `nfc_type2.lua`, examples | Binding registration and public API integration |
 | `test_*.py` | Version, workflow, gate, dependency identity and publication rejection contracts |
 
-The full runner requires all 15 CTest entries, positive Busted/Query counts and
+The full runner requires all 17 CTest entries, positive Busted/Query counts and
 zero failed, pending or skipped tests. It builds Core only as the required
 library. It does not duplicate Core parser/writer suites. The shared corpus
 remains owned by Core and is always selected from the linked Core revision.
