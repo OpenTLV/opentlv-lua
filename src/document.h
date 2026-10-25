@@ -12,10 +12,13 @@
 void opentlv_lua_open_document(lua_State* L, int module_index);
 /* Checked private bridges for compiled Query; never bypass handle validity. */
 tlv_document_t* opentlv_lua_document_native(lua_State* L, int index);
-void            opentlv_lua_document_invalidate(lua_State* L, int index);
-void            opentlv_lua_document_query_guard(lua_State* L, int index, int begin);
-tlv_node_t*     opentlv_lua_node_native(lua_State* L, int index, int document_index);
-int             opentlv_lua_document_push_node(lua_State* L, int document_index, tlv_node_t* node);
+/* Pushes an owning Document that retains the Format at `format_index` and returns
+ * its empty native slot; a Document left empty is collected without a tree. */
+tlv_document_t** opentlv_lua_document_push_owner(lua_State* L, int format_index);
+void             opentlv_lua_document_invalidate(lua_State* L, int index);
+void             opentlv_lua_document_query_guard(lua_State* L, int index, int begin);
+tlv_node_t*      opentlv_lua_node_native(lua_State* L, int index, int document_index);
+int              opentlv_lua_document_push_node(lua_State* L, int document_index, tlv_node_t* node);
 #endif
 
 #endif

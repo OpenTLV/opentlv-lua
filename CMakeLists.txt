@@ -261,6 +261,15 @@ if(OPENTLV_BUILD_LUA_TESTS)
             COMMAND ${OPENTLV_LUA_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests/stream_spec.lua" --allocator)
         set_tests_properties(Integration_lua_stream Integration_lua_stream_allocator PROPERTIES
             LABELS "integration;lua" ENVIRONMENT "${_lua_test_environment}")
+        add_test(NAME Integration_lua_document_query_schema
+            COMMAND ${OPENTLV_LUA_EXECUTABLE}
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/document_query_schema_spec.lua")
+        add_test(NAME Integration_lua_document_query_schema_allocator
+            COMMAND ${OPENTLV_LUA_EXECUTABLE}
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/document_query_schema_spec.lua" --allocator)
+        set_tests_properties(Integration_lua_document_query_schema
+            Integration_lua_document_query_schema_allocator PROPERTIES
+            LABELS "integration;lua" ENVIRONMENT "${_lua_test_environment}")
         add_test(NAME Integration_lua_nfc_type2
             COMMAND ${OPENTLV_LUA_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests/nfc_type2.lua")
         set_tests_properties(Integration_lua_nfc_type2 PROPERTIES
@@ -291,6 +300,11 @@ if(OPENTLV_BUILD_LUA_TESTS)
         set_tests_properties(Integration_example_lua_stream PROPERTIES
             LABELS "integration;examples;lua" ENVIRONMENT "${_lua_test_environment}"
             PASS_REGULAR_EXPRESSION "Hello, streamed world!")
+        add_test(NAME Integration_example_lua_audit
+            COMMAND ${OPENTLV_LUA_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/examples/audit.lua")
+        set_tests_properties(Integration_example_lua_audit PROPERTIES
+            LABELS "integration;examples;lua" ENVIRONMENT "${_lua_test_environment}"
+            PASS_REGULAR_EXPRESSION "Hello, audited world!")
     else()
         message(STATUS "lua interpreter not found; skipping the Lua binding examples.")
     endif()

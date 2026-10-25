@@ -7,6 +7,7 @@
 #include "compat.h"
 #include "format.h"
 
+#include <tlv/query/query.h>
 #include <tlv/reader/tree.h>
 
 /* Element budget of tree traversal when the caller sets none. */
@@ -29,5 +30,15 @@ void opentlv_lua_open_visitor(lua_State* L, int module_table_index);
  * traversal failures, including need-more-data, after releasing the callback. */
 int opentlv_lua_visit_cursor(lua_State* L, tlv_lua_format_t* format, tlv_reader_t* reader,
                              tlv_tree_reader_t* tree, int callback_index, int* busy);
+
+/* Visits Query matches through the same protected callback(element), where
+ * element also has "depth": the resumable tlv_query_visit() over `tree` and
+ * `matcher`, or, with `tree` NULL, tlv_query_visit_buffer() over complete
+ * `data` with its own frames. Returns `visited, stopped` like
+ * opentlv_lua_visit_cursor(). */
+int opentlv_lua_visit_query(lua_State* L, tlv_lua_format_t* format, tlv_tree_reader_t* tree,
+                            tlv_query_matcher_t* matcher, const uint8_t* data, size_t size,
+                            const tlv_query_t* query, size_t max_depth, size_t max_elements,
+                            int callback_index);
 
 #endif /* OPENTLV_LUA_VISITOR_H */

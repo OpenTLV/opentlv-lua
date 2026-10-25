@@ -7,6 +7,7 @@
 #include "format.h"
 #include "program.h"
 #include "path_query.h"
+#include "visitor.h"
 
 #include <string.h>
 #include <limits.h>
@@ -148,10 +149,9 @@ static int matcher_input_run(lua_State* L) {
 static int matcher_input(lua_State* L) {
     return matcher_call(L, matcher_input_run);
 }
-static int matcher_pull(lua_State* L, int visit) {
+static int matcher_next_run(lua_State* L) {
     query_matcher* q = luaL_checkudata(L, 1, MATCHER_MT);
     if (q->mode == 1) return luaL_error(L, "reset before switching from manual feed to Reader");
-    if (visit) luaL_checktype(L, 2, LUA_TFUNCTION);
     q->mode = 2;
     for (;;) {
         tlv_tree_item_t         item;
@@ -160,29 +160,29 @@ static int matcher_pull(lua_State* L, int visit) {
         tlv_result_t rc = tlv_tree_reader_next_diag(&q->reader, &item, &diagnostic);
         if (rc == TLV_END) {
             lua_pushnil(L);
-            return visit ? 0 : 1;
+            return 1;
         }
         if (rc != TLV_OK) return opentlv_lua_raise_reader_error(L, rc, &diagnostic);
         if (!tlv_query_matcher_visit(&q->matcher, &item.element.tag, item.depth)) continue;
-        if (visit) lua_pushvalue(L, 2);
         rc = (tlv_result_t)opentlv_lua_push_element(L, &item.element, item.offset);
         if (rc != TLV_OK) return opentlv_lua_raise(L, rc, 1, item.offset);
         lua_pushinteger(L, (lua_Integer)item.depth);
         lua_setfield(L, -2, "depth");
         lua_pushboolean(L, item.constructed);
         lua_setfield(L, -2, "constructed");
-        if (!visit) return 1;
-        lua_call(L, 1, 1);
-        int stop = lua_isboolean(L, -1) && !lua_toboolean(L, -1);
-        lua_pop(L, 1);
-        if (stop) return 0;
+        return 1;
     }
 }
-static int matcher_next_run(lua_State* L) {
-    return matcher_pull(L, 0);
-}
+/* tlv_query_visit() resumes the same matcher and Tree Reader as next(). */
 static int matcher_visit_run(lua_State* L) {
-    return matcher_pull(L, 1);
+    query_matcher* q = luaL_checkudata(L, 1, MATCHER_MT);
+    if (q->mode == 1) return luaL_error(L, "reset before switching from manual feed to Reader");
+    luaL_checktype(L, 2, LUA_TFUNCTION);
+    q->mode = 2;
+    lua_settop(L, 2);
+    lua_rawgeti(L, LUA_REGISTRYINDEX, q->format_ref);
+    tlv_lua_format_t* format = opentlv_lua_check_format(L, 3);
+    return opentlv_lua_visit_query(L, format, &q->reader, &q->matcher, NULL, 0, NULL, 0, 0, 2);
 }
 static int matcher_next(lua_State* L) {
     return matcher_call(L, matcher_next_run);
@@ -256,6 +256,37 @@ static int query_steps(lua_State* L) {
     return 1;
 }
 
+static int query_format(lua_State* L) {
+    const tlv_query_t* self = (const tlv_query_t*)luaL_checkudata(L, 1, QUERY_MT);
+    size_t             required = 0;
+    tlv_result_t       code = tlv_query_format(self, NULL, 0, &required);
+    if (code != TLV_OK) return opentlv_lua_raise(L, code, 0, 0);
+    char* text = (char*)lua_newuserdata(L, required);
+    code = tlv_query_format(self, text, required, &required);
+    if (code != TLV_OK) return opentlv_lua_raise(L, code, 0, 0);
+    lua_pushlstring(L, text, required - 1);
+    return 1;
+}
+
+/* visit(data, format, callback, options) -> visited, stopped, through
+ * tlv_query_visit_buffer(); options take only max_depth and max_elements. */
+static int query_visit(lua_State* L) {
+    const tlv_query_t* self = (const tlv_query_t*)luaL_checkudata(L, 1, QUERY_MT);
+    size_t             length;
+    const uint8_t*     data = (const uint8_t*)luaL_checklstring(L, 2, &length);
+    luaL_checktype(L, 4, LUA_TFUNCTION);
+    lua_settop(L, 5);
+    if (lua_isnil(L, 3)) {
+        lua_getfield(L, LUA_REGISTRYINDEX, OPENTLV_LUA_DEFAULT_FORMAT_KEY);
+        lua_replace(L, 3);
+    }
+    tlv_lua_format_t* format = opentlv_lua_check_format(L, 3);
+    size_t            depth = opentlv_lua_query_limit(L, 5, "max_depth", TLV_TREE_DEFAULT_DEPTH);
+    size_t            elements = opentlv_lua_query_limit(L, 5, "max_elements", 65536);
+    return opentlv_lua_visit_query(L, format, NULL, NULL, length ? data : NULL, length, self, depth,
+                                   elements, 4);
+}
+
 /* Pull between Lua allocations: no Lua error can unwind a native callback.
  * Frames are Lua-owned scratch, so even allocation failures release them. */
 static int query_evaluate(lua_State* L) {
@@ -304,10 +335,9 @@ static int query_evaluate(lua_State* L) {
 }
 
 void opentlv_lua_open_query(lua_State* L, int module_index) {
-    static const opentlv_lua_method_t methods[] = {{"steps", query_steps},
-                                                   {"evaluate", query_evaluate},
-                                                   {"matcher", query_matcher_new},
-                                                   {NULL, NULL}};
+    static const opentlv_lua_method_t methods[] = {
+        {"steps", query_steps}, {"format", query_format},       {"evaluate", query_evaluate},
+        {"visit", query_visit}, {"matcher", query_matcher_new}, {NULL, NULL}};
     static const opentlv_lua_method_t matcher_methods[] = {{"matches", matcher_matches},
                                                            {"reset", matcher_reset},
                                                            {"rebind", matcher_rebind},
@@ -316,7 +346,7 @@ void opentlv_lua_open_query(lua_State* L, int module_index) {
                                                            {"visit", matcher_visit},
                                                            {NULL, NULL}};
     opentlv_lua_new_type(L, MATCHER_MT, matcher_methods, matcher_gc, NULL, NULL);
-    opentlv_lua_new_type(L, QUERY_MT, methods, NULL, NULL, NULL);
+    opentlv_lua_new_type(L, QUERY_MT, methods, NULL, query_format, NULL);
     lua_pushcfunction(L, query_new);
     lua_setfield(L, module_index, "query");
 }

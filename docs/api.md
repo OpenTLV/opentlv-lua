@@ -220,6 +220,9 @@ point for the stricter DER traversal.
 - `set_input()`, `consumed()`, `offset()`, `at_end()` and `format()` work as for
   an [incremental Reader](#incremental-input). A constructed element is
   returned only when all of its bytes are available.
+- `document_builder(options)` copies the stream, or one subtree of it, into an
+  owning [Document](#query-and-document) through the C Document builder. See
+  [Building Documents from a Tree Reader](#building-documents-from-a-tree-reader).
 
 ## Error handling
 
@@ -577,6 +580,7 @@ required. Options are:
 | `max_depth` | `32` | Native nesting limit |
 | `max_elements` | `100000` | Total element limit; zero allows only empty input |
 | `unknown` | `"by_schema"` | `"by_schema"`, `"allow"` or `"reject"` |
+| `first` | `false` | Stop at the first failure through `tlv_schema_validate()` |
 
 Numbers must be nonnegative native-size integers. `math.huge` represents
 `SIZE_MAX` for upper length/occurrence bounds and `max_elements`. Lua versions
@@ -597,6 +601,54 @@ Malformed input, invalid schema configuration and exceeded limits return
 limits schema reports only. C provides no partial schema report on these
 failures. Lua argument/type errors and allocation failures raise Lua errors.
 
+With `first = true`, validation stops at the first failure. The result has the
+same fields; a failure has one diagnostic and `total_count = 1`. Each scope then
+follows its own `allow_unknown`, so `unknown` must stay `"by_schema"`, and
+`capacity` is not used.
+
+### Checked schemas
+
+`schema:check()` checks the whole definition once through
+`tlv_schema_prepare()` and returns a checked Schema; an invalid definition
+raises the Schema diagnostic with code `INVALID_SCHEMA`. `checked:validate(data,
+format, options)` takes the same arguments and returns the same result as
+`schema:validate()`, without repeating the definition check on every call.
+The checked Schema keeps its Schema alive; `checked:schema()` returns it.
+Because a Schema is an immutable snapshot, the check stays valid.
+
+```lua
+local checked = schema:check()
+for _, record in ipairs(records) do
+    assert(checked:validate(record, format).ok)
+end
+```
+
+### Length schemas and value constraints
+
+`opentlv.length_schema(rules)` snapshots a table of per-tag length rules
+(`tlv_schema_t`). Each rule has a binary `tag` and the optional `name`,
+`min_length`, `max_length`, `length_multiple` and `flags` of a structural rule.
+`find(tag)` returns a copy of the first rule for `tag`, or `nil`.
+`validate_length(tag, length)` returns `true` when C permits the length and
+`false` when it does not or the tag has no rule; reversed bounds raise
+`INVALID_SCHEMA`.
+
+`opentlv.value_constraint(config)` checks a constraint on one decoded signed
+64-bit value (`tlv_value_constraint_t`) when it is created. `kind` is `"none"`
+(the default), `"range"` with inclusive `min_value` and `max_value`, or
+`"allowed_values"` with an `allowed_values` array and optional
+`allowed_value_names`, parallel to it, where `nil` means a value has no name.
+Values are integers or decimal strings for exact 64-bit values, as for
+[codecs](#integers-and-configured-codecs). `validate(value)` returns a boolean
+and `name(value)` the name of an allowed value or `nil`. Combine it with a
+codec's decode step; it does not inspect TLV bytes.
+
+```lua
+local levels = tlv.value_constraint {kind = "allowed_values", allowed_values = {1, 2},
+                                     allowed_value_names = {"highest", "high"}}
+assert(levels:validate(2) and levels:name(2) == "high")
+```
+
 ## Diagnostic tables
 
 Schema reports, Reader and Writer use the same common native diagnostic
@@ -607,6 +659,9 @@ Schema or Reader/Writer is collected. Common fields are `code`, `message`
 by C. Offsets remain zero-based bytes, independent of Lua array indexing.
 `contexts` is an array of `{layer, key, value}` tables in native order.
 
+Schema diagnostics also carry `cause`, the `tlv_schema_cause_string()` name of
+the layer whose detail the C diagnostic holds: `"schema"` for violations and
+definition failures, `"reader"` for malformed input, or `"none"`.
 Schema violations additionally provide:
 
 - `kind`: `"missing"`, `"duplicate"`, `"unexpected"`, `"kind"`, `"length"` or `"order"`.
@@ -625,7 +680,8 @@ parent-element offset when nested and have no offset at root level. Fatal
 diagnostics carry only code/message/severity and the offset if C provided one;
 the binding does not reparse the input to reconstruct tag or path information.
 
-See the runnable [schema example](../examples/schema.lua).
+See the runnable [schema example](../examples/schema.lua) and the
+[audit example](../examples/audit.lua) (`lua examples/audit.lua`).
 
 ## Value codecs
 
@@ -776,8 +832,9 @@ for complete objects remains unbound. See the runnable
 `tlv.query(path)` compiles the C Query language: exact hexadecimal tags separated
 by `/`, such as `E1/9F02`. Tags are byte identities; there are no wildcards,
 indexes, predicates or recursive searches. `query:steps()` returns binary tag
-strings. Query compilation errors raise `opentlv.Error` with a zero-based
-character `offset`, including rejected embedded NUL characters.
+strings, and `query:format()` (also `tostring(query)`) the canonical uppercase
+path from `tlv_query_format()`. Query compilation errors raise `opentlv.Error`
+with a zero-based character `offset`, including rejected embedded NUL characters.
 
 `query:evaluate(data, format, options)` returns all matching entries in document
 order, with the Reader fields `tag`, `length`, `value`, `offset`, plus `depth`
@@ -788,9 +845,17 @@ nonmatching branches), and reports Reader errors with available diagnostics.
 65536. Limits must be nonnegative integers. This uses the supplied Format's
 framing contract, not additional semantic Schema or full DER validation.
 
+`query:visit(data, format, callback, options)` calls `callback(match)` for each
+match through `tlv_query_visit_buffer()`, with the same entry fields, and returns
+`visited, stopped`; returning `false` stops. It traverses complete input without
+a Reader and takes only `max_depth` and `max_elements`; Core then owns
+`TLV_QUERY_MAX_STEPS` (65) frames, so deeper input raises `BUFFER_TOO_SHORT`.
+Callback errors propagate unchanged.
+
 `query:matcher(format, options)` owns a resumable native matcher and Tree Reader.
 Use `set_input(bytes, discard, final)`, `next()` or `visit(callback)`; returning
-`false` stops after the current match, and subsequent calls resume. Nonfinal
+`false` stops after the current match, and subsequent calls resume. `visit()`
+runs `tlv_query_visit()` and returns `visited, stopped`. Nonfinal
 exhaustion raises `NEED_MORE_DATA`, preserving state for input replacement.
 `rebind(equivalent_query)` preserves suspended state; `reset()` clears both
 matching and Reader state. `matches(tag, depth)` also supports manual preorder
@@ -821,8 +886,11 @@ Document operations:
 | Method | Result and behavior |
 | --- | --- |
 | `find(path_or_query)` | First matching Node, or `nil`; searches past dead-end branches. |
+| `find_child(tag, parent)` | First direct child of `parent` (a path, Query or Node; omitted for the top level) with binary `tag`, or `nil`. |
 | `query(path_or_query)` | Array of all matching Nodes in document order. |
+| `visit(path_or_query, callback)` | Call `callback(node)` for each match in document order; returns `visited, stopped`. |
 | `first()` / `count()` | First root or `nil`; total number of nodes including descendants. |
+| `revision()` | Number of successful inserts, erases and Value replacements; failed edits keep it. |
 | `set(target, value)` | Replace the first matched node's Value; returns `false` if absent, `true` on success. |
 | `insert(tag, value, parent, before)` | Return a new Node; binary tag and Value strings are copied. Omitted parent means root level; omitted before means append. |
 | `erase(target)` | Remove the node and descendants; returns whether a node was found. |
@@ -834,16 +902,32 @@ or invalidated Nodes raise Lua argument errors. `set` and `erase` affect only
 the first path match; use `query` to select repeated entries individually.
 
 Nodes expose `tag()`, `value()`, `is_constructed()`, `first_child()`, `next()`,
-`parent()`, `next_same_tag()`, `set(value)`, `erase()` and `serialize(format)`.
+`parent()`, `next_same_tag()`, `identity()`, `source_location()`, `set(value)`,
+`erase()` and `serialize(format)`.
 Navigation returns `nil` at the end. `value()` returns copied primitive bytes,
 including `""` for an empty primitive, and `nil` for constructed nodes; read
 children or serialize the subtree instead. Constructed Value replacement and
 insertion parse child bytes through the native Document format.
 
+`source_location()` returns `{offset, header_size}` with the node's original
+absolute input offset and encoded header size when the Document was parsed or
+built with `retain_source_locations = true`, or `nil`. Inserted nodes have no
+location. Replacing a Value drops the location of the node and its ancestors;
+inserting or erasing drops those of the ancestors. Unaffected nodes keep their
+original coordinates even when encoding would move them.
+
+`visit()` and `query()` run the canonical C matcher over the Document
+(`tlv_document_query_visit()`). During a visit the Document rejects
+`set`, `insert`, `erase` and `close` with `INVALID_STATE`; read-only use,
+including nested visits, is allowed, and callback errors propagate unchanged.
+
 Each Node keeps its native Document alive. Removing a node invalidates all
 handles to it and its descendants. Successful constructed Value replacement
 invalidates handles to the former descendants; the parent and unrelated nodes
 remain usable. Failed mutations leave both content and handles unchanged.
+A Node is checked with its never-reused Core identity whenever the Document's
+retirement epoch has changed, so a stale handle is detected even when a new
+node reuses its address. `identity()` returns that identity.
 Invalidated handles raise argument errors before touching native node memory.
 
 Native mutation and encoding failures raise `opentlv.Error` with the original
@@ -854,12 +938,55 @@ Writer contract: framing can be normalized, and incompatible destination
 formats can reject the tree. Lua does not implement a separate DOM or mutation
 engine.
 
+### Building Documents from a Tree Reader
+
+`tree_reader:document_builder(options)` creates a builder that copies items of
+the reader into a new owning Document. `options.subtree` selects what it copies:
+
+| `subtree` | Copies |
+| --- | --- |
+| `nil` | The whole stream through final end, from a fresh reader |
+| `"next"` | The next item and its descendants; returns `nil` at the end of input |
+| `"current"` | The item the last `next()` returned and its descendants |
+
+Other options are the Document's `max_depth`, `max_elements` and
+`retain_source_locations`; depth counts from the copied root. When the builder
+cannot be created, for example because the root exceeds `max_elements`, a root
+pulled for `"next"` stays selectable with `"current"`. `builder:consume()`
+returns the Document when it is complete. On non-final input it raises
+`NEED_MORE_DATA` and keeps the unfinished tree: call `set_input()` on the reader
+and `consume()` again. A subtree builder stops after its root's descendants, so
+the reader continues with the next sibling. While the builder is active, the
+reader rejects `next()`, `next_event()`, `skip_subtree()` and `visit()` with
+`INVALID_STATE`; `set_input()` and status methods still work. Completion, a
+terminal error or `builder:close()` releases the reader. The Document owns
+copies of all bytes and keeps the reader's Format alive.
+
+```lua
+local reader = tlv.tree_reader(wire, tlv.formats.ber)
+repeat local item = reader:next() until item.tag == string.char(0xA5)
+local proprietary = reader:document_builder({subtree = "current"}):consume()
+```
+
 ## Compiled Query
 
 `opentlv.query_program(text, format, options)` owns an immutable C program;
 `query_program_load(image, format, options)` validates a same-release image.
 Options include typed `variables`, named Tag maps and explicit compile limits.
-Programs expose `info()`, `variables()`, `format()`, `explain()` and `image()`.
+Programs expose `info()`, `plan_info()`, `variables()`, `format()`, `explain()`
+and `image()`. Without a `resolve` callback, names resolve identically in both
+compiler passes, so the program compiles directly through
+`tlv_query_compile()`; a `resolve` callback keeps checked preparation and commit.
+Both produce the same image.
+
+`opentlv.query_plan_open(image, format, options)` validates a native plan, such
+as `program:image()`, without the Query frontend (`tlv_query_plan_open()`): no
+recompilation, name resolution or variable declarations. Its variables and its
+provider and Tag adapter IDs are still required by execution, so pass the
+`providers` and `tags` the plan was built with; other options do not apply.
+Plans are release- and byte-order-specific native layouts, not a serialization
+format. `plan_info()` reads the requirements from the plan itself
+(`tlv_query_plan_info()`); its compiler scratch and optimization fields are zero.
 
 The program retains its Format, including configured Fixed Format userdata;
 reuse that Format object with Documents evaluated by the program. Options
@@ -881,11 +1008,15 @@ dictionary when enabled, including the `emv:PAN` alias.
 value)`, `set_input(bytes, discard, final)`, `next()`, `visit(callback)`,
 `exists(early)`, `info()` and `reset()` delegate to C. Use
 `evaluate_document(document)` for checked Nodes and `result()` for scalars.
+`reset()` resets the execution in place (`tlv_query_exec_reset()`), keeping its
+program, providers, workspace and budgets.
 Lua strings and match snapshots own copied bytes. Callback errors invalidate
 the execution until reset, and reentrant calls are rejected. `close()` releases
 native owners deterministically. Native failures raise tables with `code` and
 Query diagnostic detail. `error.query.kind_name` is the canonical C category,
-such as `syntax` or `state`. `error.query.expression` is the related expression
+such as `syntax` or `state`. `error.query.cause` and `cause_name` name the layer
+whose detail is active (`none`, `reader`, `codec` or `schema`).
+`error.query.expression` is the related expression
 location, with kind `unknown` when `error.location` already is that span, and
 `error.query.codec_detail.reported` is the raw provider result. A rejected path
 text raises the same Query syntax or limit error. A Schema Query failure's
@@ -905,6 +1036,13 @@ copied event metadata; return an integer or a UTF-8 string for `text`. Set
 images. Provider errors propagate after returning through C; Query reentry from
 providers is rejected.
 
+A provider can instead name a Value codec, `{id = ..., codec = codec}`, which C
+decodes through `tlv_query_codec_decode()` without Lua callbacks. Codecs whose
+decoded value is a 64-bit integer, such as `int64_minimal_be`, the ASN.1
+`integer` and `number{}` codecs, or a byte span, such as `bytes` and `text{}`
+codecs, are accepted; other representations and custom codecs raise
+`INVALID_ARG`. The program keeps the codec alive.
+
 `execution:feed(event)` accepts canonical event tables with `kind`, `tag`,
 `value`, `depth` and `offset`. An optional `source` string contains exactly one
 encoded element; C derives its Tag, Value and Layout through the program's
@@ -913,7 +1051,13 @@ Call `finish()` before pulling deferred results;
 raw events and Reader input cannot be mixed before reset.
 `next_ordinal()` returns an owned event table and traversal ordinal from a
 completed retained selection, including Document selections. `next()` continues
-to return checked Nodes for Documents.
+to return checked Nodes for Documents, and `visit(callback)` calls
+`callback(node)` for the remaining Document results
+(`tlv_document_query_program_visit()`); returning `false` stops, and the next
+call resumes after the delivered node. For programs whose `info()` reports
+`constructed_values_required`, `evaluate_document(document, context, capacity)`
+without `capacity` measures the Value snapshot through
+`tlv_document_query_value_size()`, growing staging to the Writer's requirements.
 `execution:edit_document(kind, tag, value, target_capacity)` edits a completed
 selection and reports the applied count. Short target storage permits retry;
 successful mutations invalidate checked Nodes.

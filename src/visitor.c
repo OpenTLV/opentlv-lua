@@ -24,6 +24,7 @@ typedef struct {
     int                  error_index;
     int                  failed;
     int                  tree;
+    int                  match;
     int                  stopped;
     size_t               visited;
     const tlv_element_t* element;
@@ -42,8 +43,13 @@ static int invoke_callback(lua_State* L) {
         L, ctx->format->format.is_constructed != NULL &&
                ctx->format->format.is_constructed(ctx->format->format.context, &ctx->element->tag));
     lua_setfield(L, -2, "constructed");
-    if (ctx->tree) lua_pushinteger(L, (lua_Integer)ctx->depth);
-    lua_call(L, ctx->tree ? 2 : 1, 1);
+    if (ctx->match) {
+        /* Query matches carry their depth like Query results. */
+        lua_pushinteger(L, (lua_Integer)ctx->depth);
+        lua_setfield(L, -2, "depth");
+    } else if (ctx->tree)
+        lua_pushinteger(L, (lua_Integer)ctx->depth);
+    lua_call(L, ctx->tree && !ctx->match ? 2 : 1, 1);
     return 1;
 }
 
@@ -130,6 +136,22 @@ int opentlv_lua_visit_cursor(lua_State* L, tlv_lua_format_t* format, tlv_reader_
         ctx.reader = NULL;
     }
     *busy = 0;
+    return ctx_finish(L, &ctx, code, &diagnostic);
+}
+
+int opentlv_lua_visit_query(lua_State* L, tlv_lua_format_t* format, tlv_tree_reader_t* tree,
+                            tlv_query_matcher_t* matcher, const uint8_t* data, size_t size,
+                            const tlv_query_t* query, size_t max_depth, size_t max_elements,
+                            int callback_index) {
+    visitor_ctx_t ctx;
+    ctx_begin(L, &ctx, format, 1, callback_index);
+    ctx.match = 1;
+    tlv_reader_diagnostic_t diagnostic;
+    tlv_reader_diagnostic_init(&diagnostic);
+    tlv_result_t code =
+        tree ? tlv_query_visit(tree, matcher, visitor_trampoline, &ctx, &diagnostic)
+             : tlv_query_visit_buffer(data, size, &format->format, query, max_depth, max_elements,
+                                      visitor_trampoline, &ctx, &diagnostic);
     return ctx_finish(L, &ctx, code, &diagnostic);
 }
 

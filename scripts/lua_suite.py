@@ -26,12 +26,15 @@ EXPECTED_TESTS = {
     "Integration_lua_writer",
     "Integration_lua_stream",
     "Integration_lua_stream_allocator",
+    "Integration_lua_document_query_schema",
+    "Integration_lua_document_query_schema_allocator",
     "Integration_lua_nfc_type2",
     "Integration_lua_components",
     "Integration_example_lua_quick_start",
     "Integration_example_lua_parse",
     "Integration_example_lua_compose",
     "Integration_example_lua_stream",
+    "Integration_example_lua_audit",
 }
 
 

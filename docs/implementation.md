@@ -161,10 +161,17 @@ installed before acquiring references; temporary diagnostic arrays are rooted
 on the Lua stack, so constructor or result-conversion allocation failures do
 not leak native storage. No Lua callback runs during C validation.
 
-`Schema:validate()` calls `tlv_schema_validate_all_diag()`. It returns bounded
+`Schema:validate()` calls `tlv_schema_validate_all_diag()`, or
+`tlv_schema_validate()` with `first = true`. It returns bounded
 schema reports or a basic native-code/offset diagnostic on fatal failures.
+`schema:check()` runs `tlv_schema_prepare()` once; the checked handle roots the
+immutable Schema snapshot it borrows and validates through
+`tlv_schema_validate_checked()` and `tlv_schema_validate_all_checked()`.
+`length_schema()` and `value_constraint()` snapshot `tlv_schema_entry_t` and
+`tlv_value_constraint_t` tables with the same reference-table ownership.
 `src/error.c` provides common `tlv_diagnostic_t` conversion shared with Reader
-and Writer; Schema adds only the typed detail exposed by the C report.
+and Writer; Schema adds only the typed detail exposed by the C report and the
+`tlv_schema_cause_string()` name of its cause.
 
 `tests/schema_spec.lua` runs under busted and directly through CTest.
 It covers rules, groups, ordering, paths, native offsets,
@@ -181,6 +188,31 @@ handles and configured Format lifetimes. Its
 `--allocator` mode injects Lua allocation failures during construction, result
 conversion, insertion and serialization. Document userdata acquire their
 finalizer before allocating native state; Node userdata root the owning
-Document. A non-owning list of live handles tracks native invalidation without
-copying the document tree. Query evaluation pulls native Tree Reader items
-between Lua allocations, avoiding Lua long jumps through native callbacks.
+Document. A Node stores its address, its never-reused Core identity and the
+Document retirement epoch it was checked against. When
+`tlv_document_retire_epoch()` changes, `tlv_document_node_identity()` decides
+whether the address still names the same node, so erased or replaced nodes are
+detected without a binding-side handle list or copy of the tree. An applied
+Query edit still invalidates every earlier Node. Query evaluation pulls native
+Tree Reader items between Lua allocations, avoiding Lua long jumps through
+native callbacks.
+
+Path visits (`document:visit()`, `document:query()`, `query:visit()` and matcher
+visits) and compiled Document result visits run Node or element projection and
+the Lua callback inside `lua_pcall()` from the Core visitor, store a Lua error
+and return `TLV_VISIT_ERROR`, then raise it again after Core returns. The
+Document rejects mutation and release while a visit runs. A Document builder
+roots its Tree Reader and marks the cursor as owned, so pulls, skips and visits
+raise `INVALID_STATE` until the builder completes, fails or is closed; the
+owning Document userdata exists before `tlv_document_builder_consume()`
+transfers the tree into it.
+
+`tests/document_query_schema_spec.lua` runs under busted and directly through
+CTest. It covers Document revisions, identity-checked Nodes, source locations,
+direct child lookup, path visits, Document builders, canonical Query paths,
+buffer and matcher visits, static compilation, native plans, in-place reset,
+codec providers, Document result visits and Value snapshot sizing, checked and
+first-failure Schema validation, length schemas and value constraints. Its
+`--allocator` mode injects Lua allocation failures across these operations and
+checks that a Document used during failed visits accepts edits afterwards.
+CTest also runs `examples/audit.lua`.

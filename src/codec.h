@@ -6,6 +6,7 @@
 
 #include "compat.h"
 #include <tlv/codec/codec.h>
+#include <tlv/query/adapters.h>
 #include <stdint.h>
 
 /* Native representation adapters only: wire semantics belong to tlv/. Each
@@ -28,5 +29,14 @@ int64_t     opentlv_lua_codec_int(lua_State* L, int index, int64_t minimum, int6
 void        opentlv_lua_codec_push_uint(lua_State* L, uint64_t value);
 void        opentlv_lua_codec_push_int(lua_State* L, int64_t value);
 const char* opentlv_lua_codec_string(lua_State* L, int index, size_t* size);
+/* Selects the tlv_query_codec_decode() representation of a builtin
+ * representation; returns zero for one without a Query form. */
+int opentlv_lua_codec_builtin_query(const opentlv_lua_codec_rep_t*    rep,
+                                    tlv_query_codec_representation_t* representation);
+/* Fills a Query adapter for the codec at `index`, which must stay rooted while
+ * the adapter is used, and its scratch size. Returns zero for custom codecs and
+ * representations without a Query form. */
+int opentlv_lua_codec_query(lua_State* L, int index, tlv_query_codec_adapter_t* adapter,
+                            size_t* scratch_size);
 
 #endif
