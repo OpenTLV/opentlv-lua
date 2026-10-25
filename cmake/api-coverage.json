@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "lock": "cmake/core-artifact.json",
+  "references": ["src"],
+  "ignore": [
+    {
+      "reason": "Endian, tag, value, size and copy primitives; Lua exposes tags and values as strings, so comparison, hashing, slicing and copies are native string operations, and byte-order and size helpers are C implementation details without a Lua-facing operation.",
+      "headers": ["tlv/endian.h", "tlv/tag.h", "tlv/value.h", "tlv/size.h", "tlv/copy.h"]
+    },
+    {
+      "reason": "Diagnostic producers for C format and codec implementations; Lua consumes diagnostics and exposes no API to build them. The native module's own use to shape binding errors is not a public operation.",
+      "symbols": [
+        "tlv_diagnostic_init",
+        "tlv_diagnostic_set_location",
+        "tlv_diagnostic_set_path",
+        "tlv_diagnostic_add_context",
+        "tlv_diagnostic_path_init",
+        "tlv_diagnostic_path_push",
+        "tlv_diagnostic_path_pop",
+        "tlv_location_set",
+        "tlv_location_resolve"
+      ]
+    }
+  ]
+}

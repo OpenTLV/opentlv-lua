@@ -10,9 +10,9 @@ or enables its native tests.
 
 | Entry point | Trigger | Required checks |
 | --- | --- | --- |
-| `lua-pr.yml` | PR to `main` | Linux Lua 5.4 Debug, all Lua tests and Query facade corpus, formatting, clang-tidy, cppcheck, Python tooling regressions, Lua syntax and CodeQL |
+| `lua-pr.yml` | PR to `main` | Linux Lua 5.4 Debug, all Lua tests and Query facade corpus, formatting, clang-tidy, cppcheck, Python tooling regressions, Lua syntax and CodeQL; informational Core API coverage |
 | `lua-main.yml` | Push to `main` | One Linux Lua 5.4 build; module identity, version and public Reader smoke; documentation change evidence after the gate |
-| `lua-full.yml` | Manual dispatch or Release call | Complete runtime/platform matrix, shared Core, LuaRocks, installed Core consumption, module packages, ASan/UBSan and all source checks |
+| `lua-full.yml` | Manual dispatch or Release call | Complete runtime/platform matrix, shared Core, LuaRocks, installed Core consumption, module packages, ASan/UBSan and all source checks; informational Core API coverage |
 | `release.yml` | Manual dispatch from `main`, only `tag` | Closed changelog, dispatch SHA, locked authenticated Core release, fresh Full CI, checksummed and attested packages, Git tag and GitHub Release |
 
 PR has no path filters or branch-push trigger. Full has no push or schedule
@@ -133,6 +133,78 @@ The GitHub Release contains both archives, `release-manifest.json` and
 `SHA256SUMS`. Every file is attested. Publication verifies attestations again
 before creating the tag. LuaRocks publication and a versioned release rockspec
 remain separate work; the development rockspec stays `scm-1`.
+
+## Core API coverage
+
+`Core API coverage` reports how much of the pinned Core's public API the native
+Lua module uses. It runs in PR and Full, not Main. The job is informational: it
+uses `continue-on-error`, is not a `Lua quality gate` prerequisite and has no
+threshold yet. The coverage epic (#25) tracks raising it. The PR and Full
+timings record it as `checks / Core API coverage`.
+
+[`scripts/api_coverage.py`](../scripts/api_coverage.py) is the binding-agnostic
+script of the Python and Rust repositories, with `cmake/api-coverage.json` as
+its default configuration. It fetches only the locked Core commit and reads
+every `TLV_API` function and data declaration under `tlv/include`. A
+declaration shape it does not recognize fails the report instead of being
+skipped. A symbol counts as referenced when its identifier appears in `src`
+outside comments; calls through Core macros are not counted. A referenced
+symbol is named by the binding, which does not prove functional parity.
+Coverage is reported for core and `tlv/builtins` separately, in total and per
+header, with every unreferenced symbol listed. The Markdown summary goes to the
+job log and job summary. `api-coverage.json` is uploaded as an attempt-scoped
+artifact.
+
+`src` is the only reference directory. Every Core call is in the native
+`opentlv._core` module; `lua/opentlv/init.lua` only re-exports it, and tests and
+examples are not part of the public API.
+
+On a pull request, the job also reads the Core lock at the base commit and lists
+the symbols added and removed between the two pins. Added symbols show whether
+the module already references or ignores them. An unchanged pin is reported as
+such.
+
+[`cmake/api-coverage.json`](../cmake/api-coverage.json) is the configuration and
+ignore list. It names the Core lock `cmake/core-artifact.json` and the reference
+directory. Each ignore entry has a `reason` and matches header paths relative to
+`tlv/include` (`headers`) or symbol names (`symbols`); both accept `fnmatch`
+patterns. Ignored symbols are excluded from the counts, even when the module
+references them. The current entries are:
+
+- the endian, tag, value, size and copy primitives: Lua exposes tags and values
+  as strings, so comparison, hashing, slicing and copies are string operations.
+  The module's `tlv_size_to_native` conversion is an implementation detail.
+- the diagnostic producers (`tlv_diagnostic_init`, setters, path builders,
+  `tlv_location_set` and `tlv_location_resolve`) for C format and codec
+  implementations. Lua exposes no API to build diagnostics; `src/error.c` uses
+  `tlv_diagnostic_init` and `tlv_diagnostic_set_location` only to shape binding
+  errors. Diagnostic consumers such as the `*_string` lookups and
+  `tlv_diagnostic_path_string` remain counted.
+
+Patterns that match nothing in the pinned Core are reported, so stale entries
+are visible after a pin bump. Change the ignore list only for symbols the
+binding intentionally leaves unbound.
+
+The first report, for Core `d87dcf96b270` (15 commits after 0.7.1), references
+118 of 254 core symbols (46.5 %) with 43 ignored, and 61 of 291 builtins symbols
+(21.0 %). Builtins-specific parity is outside the coverage epic. The report
+reads the headers, not a build; official builds enable every Core component and
+builtin.
+
+Run it locally from the repository root:
+
+```sh
+python -B scripts/api_coverage.py
+python -B scripts/api_coverage.py --core ../opentlv --commit HEAD --base-commit <old-sha>
+python -B scripts/api_coverage.py --base origin/main --output build/api-coverage.json
+```
+
+Without `--core`, the script caches the shallow Core fetch in
+`build/api-coverage/core.git`. `--core` reads an existing Core checkout instead;
+the requested commits must already be there. `--commit` measures a different
+Core revision than the lock. `--base` reads the lock at a binding revision, and
+`--base-commit` names a previous Core revision directly. The parsing, ignore,
+pin-diff and workflow logic is covered by `tests/test_api_coverage.py`.
 
 ## Timings and acceptance
 
