@@ -18,6 +18,9 @@ end
 
 See the [Lua API guide](docs/api.md) for usage and
 [implementation notes](docs/implementation.md) for ownership and error handling.
+The [Core API coverage record](docs/api-coverage.md) maps every generic Core
+header to its public Lua API and binding tests, and lists the reviewed
+exclusions and limitations for the pinned Core.
 
 ## Build
 

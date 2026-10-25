@@ -2,6 +2,7 @@
   "schema": 1,
   "lock": "cmake/core-artifact.json",
   "references": ["src"],
+  "complete": ["core"],
   "ignore": [
     {
       "reason": "Endian, tag, value, size and copy primitives; Lua exposes tags and values as strings, so comparison, hashing, slicing and copies are native string operations, and byte-order and size helpers are C implementation details without a Lua-facing operation.",
@@ -54,6 +55,10 @@
     {
       "reason": "NUL-terminated form of `tlv_query_parse_n()`; Lua strings carry their length, so `query()`, path arguments and `Document` lookups parse through `tlv_query_parse_n()`, which also rejects embedded NUL.",
       "symbols": ["tlv_query_parse"]
+    },
+    {
+      "reason": "Checked translation of a location by a byte origin the caller adds; Lua has no caller-owned destinations or sub-buffer origins: every entry point passes Core the Lua string it received or owned output, and reports Core's coordinates unchanged.",
+      "symbols": ["tlv_location_translate"]
     },
     {
       "reason": "Definition check that `tlv_schema_prepare()` runs before keeping the checked handle; Lua Schemas are immutable snapshots, so `schema:check()` prepares once and a separate definition-only check adds no operation.",

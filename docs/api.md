@@ -10,7 +10,8 @@ a Writer, Tree Writer with structural events and measurement, Schema,
 tag/length/value `Element` tables and preorder tree
 traversal, borrowed Query, an owned mutable Document with checked Nodes,
 [custom Formats](#custom-formats) composed from Core's field encodings,
-[Value](#value-codecs) and [structure codecs](#structure-codecs) and
+[Value](#value-codecs) and [structure codecs](#structure-codecs),
+[identifier definitions](#identifier-definitions) and
 [wire generation](#wire-generation). See the
 [binding matrix](https://github.com/OpenTLV/opentlv/blob/main/docs/concepts/bindings.md#capability-implementation-matrix) and
 [Lua development guide](implementation.md).
@@ -660,6 +661,15 @@ Schema or Reader/Writer is collected. Common fields are `code`, `message`
 by C. Offsets remain zero-based bytes, independent of Lua array indexing.
 `contexts` is an array of `{layer, key, value}` tables in native order.
 
+When C tracked the enclosing Tags, `path` holds their bytes outermost first,
+`path_omitted` counts the innermost Tags that did not fit, and `path_text` is
+Core's `tlv_diagnostic_path_string()` text, such as `"30 > A5"`. A tracked
+empty path is `""`, and a truncated one ends in `" > ..."`. The text is copied
+into the table with the rest of the diagnostic. `path_text` is absent without a
+tracked path and for a path Core does not format, such as one with an empty
+Tag. In the pinned Core only Schema producers, including Query Schema
+validation, track paths.
+
 Schema diagnostics also carry `cause`, the `tlv_schema_cause_string()` name of
 the layer whose detail the C diagnostic holds: `"schema"` for violations and
 definition failures, `"reader"` for malformed input, or `"none"`.
@@ -683,6 +693,34 @@ the binding does not reparse the input to reconstruct tag or path information.
 
 See the runnable [schema example](../examples/schema.lua) and the
 [audit example](../examples/audit.lua) (`lua examples/audit.lua`).
+
+## Identifier definitions
+
+`opentlv.definition_registry(definitions)` snapshots an array of
+`{tag = raw_tag, name = "..."}` tables into a `tlv_definition_registry_t`.
+`name` is optional and must not contain NUL. `registry:find(tag)` looks the
+identifier up with Core's `tlv_definition_find()` and returns an owned
+`{tag, name}` table and the entry's 1-based index, or `nil` for an unknown
+Tag. Tags compare by size and bytes, so duplicates resolve to the first entry
+and two empty Tags are equal. `registry:definitions()` returns owned copies of
+every entry in registry order.
+
+```lua
+local names = tlv.definition_registry {
+    {tag = string.char(0x5A), name = "PAN"},
+    {tag = string.char(0x9F, 0x02), name = "Amount, Authorised"},
+}
+local definition, index = names:find(string.char(0x9F, 0x02)) -- {tag, name}, 2
+assert(names:find(string.char(0x01)) == nil)
+```
+
+A registry carries names only. It selects no Format, codec or Schema and is
+not global: each application chooses the registry for its context. Changing
+the input table afterwards does not change the registry, and changing a
+returned table does not change later lookups. Compiled Query programs take the
+same entry tables through
+[`opentlv.query_definition_resolver()`](#compiled-query). See the
+[audit example](../examples/audit.lua).
 
 ## Value codecs
 

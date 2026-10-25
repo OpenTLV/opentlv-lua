@@ -35,7 +35,7 @@ void opentlv_lua_push_error(lua_State* L, tlv_result_t code, int has_offset, siz
 void opentlv_lua_push_location(lua_State* L, const tlv_location_t* location);
 
 /* Copies the common native diagnostic, including its complete location,
- * optional path and contexts, into an owned error table with the
+ * optional path with its Core text and contexts, into an owned error table with the
  * "opentlv.Error" metatable. Does not raise. */
 void opentlv_lua_push_diagnostic(lua_State* L, const tlv_diagnostic_t* diagnostic);
 

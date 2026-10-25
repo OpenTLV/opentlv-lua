@@ -38,7 +38,7 @@ def configuration():
 
 
 def check_results(results, tier):
-    expected = {'build', 'quality', 'codeql'} if tier != 'main' else {'smoke'}
+    expected = {'build', 'quality', 'codeql', 'api_coverage'} if tier != 'main' else {'smoke'}
     require(set(results) == expected, 'Missing or unexpected required jobs')
     require(all(v.get('result') == 'success' for v in results.values()), 'Required Lua checks did not all succeed')
 

@@ -4,6 +4,7 @@
 #include "error.h"
 #include "codec.h"
 
+#include <stdint.h>
 #include <stdio.h>
 
 void opentlv_lua_push_writer_error(lua_State* L, tlv_result_t code,
@@ -238,6 +239,21 @@ void opentlv_lua_push_location(lua_State* L, const tlv_location_t* location) {
     }
 }
 
+/* Sets "path_text" on the table on top of the stack to Core's " > "-joined
+ * path text. The size query reports BUFFER_TOO_SHORT with the length; a path
+ * Core cannot format, such as one with an empty Tag, has no text. */
+static void push_path_text(lua_State* L, const tlv_diagnostic_path_t* path) {
+    size_t       length = 0;
+    tlv_result_t code = tlv_diagnostic_path_string(path, NULL, 0, &length);
+    if ((code != TLV_OK && code != TLV_ERR_BUFFER_TOO_SHORT) || length == SIZE_MAX) return;
+    char* text = lua_newuserdata(L, length + 1);
+    if (tlv_diagnostic_path_string(path, text, length + 1, &length) == TLV_OK) {
+        lua_pushlstring(L, text, length);
+        lua_setfield(L, -3, "path_text");
+    }
+    lua_pop(L, 1);
+}
+
 void opentlv_lua_push_diagnostic(lua_State* L, const tlv_diagnostic_t* diagnostic) {
     const tlv_location_t* location = &diagnostic->location;
     lua_newtable(L);
@@ -273,6 +289,7 @@ void opentlv_lua_push_diagnostic(lua_State* L, const tlv_diagnostic_t* diagnosti
         lua_setfield(L, -2, "path");
         lua_pushinteger(L, (lua_Integer)diagnostic->path.omitted);
         lua_setfield(L, -2, "path_omitted");
+        push_path_text(L, &diagnostic->path);
     }
     if (diagnostic->contexts) {
         lua_newtable(L);

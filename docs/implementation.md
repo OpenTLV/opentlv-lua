@@ -195,12 +195,34 @@ immutable Schema snapshot it borrows and validates through
 and Writer; Schema adds only the typed detail exposed by the C report and the
 `tlv_schema_cause_string()` name of its cause.
 
+When a diagnostic tracks enclosing Tags, the common conversion also formats
+them with `tlv_diagnostic_path_string()`: a size query reports the length, a
+temporary Lua userdata receives the text, and the error table owns the copied
+string. A path Core rejects gets no `path_text`; the conversion never formats
+paths itself.
+
 `tests/schema_spec.lua` runs under busted and directly through CTest.
 It covers rules, groups, ordering, paths, native offsets,
 capacity/count-only results, malformed input, numeric checks, immutable
 configuration and garbage collection. When the test allocator is available,
 it also injects failures during construction and diagnostic conversion and
 checks that retained child schemas are released.
+
+## Definition registry implementation
+
+`src/definition.c` snapshots the entry tables of
+`opentlv.definition_registry()` into a `tlv_definition_t` array in a Lua
+userdata. The registry's environment roots that array and every Tag and name
+string, so Core borrows them for the registry's lifetime without a finalizer or
+C heap allocation. `find()` calls `tlv_definition_find()` and copies the entry
+it returns into a new table; the binding does not compare Tags itself.
+
+`tests/definition_path_spec.lua` runs under busted and directly through CTest,
+as `Integration_lua_definition_path` and its allocator variant. It covers
+first-match and empty-Tag lookup, snapshots, owned results and argument
+errors, and the `path_text` of nested, truncated, root and missing paths. Its
+`--allocator` mode injects Lua allocation failures across registry creation,
+lookup and diagnostic conversion.
 
 ## Query and Document ownership tests
 

@@ -83,7 +83,7 @@ class Gates(unittest.TestCase):
                 self.validate(data)
 
     def test_each_top_level_job_required(self):
-        good = {key: {'result': 'success'} for key in ('build', 'quality', 'codeql')}
+        good = {key: {'result': 'success'} for key in ('build', 'quality', 'codeql', 'api_coverage')}
         policy.check_results(good, 'full')
         for key in good:
             for result in ('failure', 'cancelled', 'skipped', 'missing'):
@@ -106,7 +106,7 @@ class Gates(unittest.TestCase):
     def test_full_cannot_be_replaced_by_pr_or_changed_definition(self):
         request = {'core_lock': LOCK, 'core_release': CORE_RELEASE}
         quality = dict(schema=1, **identity(), tier='full', configuration={'known': 'hash'}, records=records(),
-                       checks={key: {'result': 'success'} for key in ('build', 'quality', 'codeql')})
+                       checks={key: {'result': 'success'} for key in ('build', 'quality', 'codeql', 'api_coverage')})
         with patch.object(release, 'configuration', return_value={'known': 'hash'}):
             release.check_quality(quality, request)
             for changes in ({'tier': 'pr'}, {'configuration': {}}, {'run_attempt': '2'}):

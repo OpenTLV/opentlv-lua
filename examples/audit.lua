@@ -3,8 +3,9 @@
 
 -- Audits one BER template inside a larger stream: a Document builder copies
 -- only the selected subtree from a Tree Reader, a Schema checked once validates
--- it, a value constraint names a decoded number, and an edit shows which nodes
--- keep their original input coordinates.
+-- it, a definition registry names the identifiers of a finding, a value
+-- constraint names a decoded number, and an edit shows which nodes keep their
+-- original input coordinates.
 local tlv = require("opentlv")
 local bytes = string.char
 
@@ -31,6 +32,14 @@ local template = tlv.schema {
     rules = {{tag = bytes(0xA5), kind = "constructed", min_occurs = 1, children = priority}},
 }:check()
 print("valid", template:validate(doc:serialize()).ok)
+
+-- The application's own names for identifiers; Core finds the first equal Tag.
+local names = tlv.definition_registry {
+    {tag = bytes(0xA5), name = "FCI Proprietary Template"},
+    {tag = bytes(0x87), name = "Application Priority Indicator"},
+}
+local missing = template:validate(bytes(0xA5, 0x00)).diagnostics[1]
+print(missing.kind, names:find(missing.tag).name, "in", missing.path_text)
 
 -- A named-number constraint on the decoded Value, not on the wire bytes.
 local levels = tlv.value_constraint {
