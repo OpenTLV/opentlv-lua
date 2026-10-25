@@ -27,7 +27,8 @@ see `src/compat.h`. It covers Reader, Writer, Tree Writer, Element and Tag, and
 preorder tree traversal (`opentlv.visit_tree`, built on `tlv_tree_reader_visit()`/
 `tlv_der_visit()`), structural Schema validation with detailed diagnostic reports,
 Value codecs with builtin and custom callback support, compiled path Query,
-and mutable Document (when `OPENTLV_DOCUMENT=ON`).
+mutable Document (when `OPENTLV_DOCUMENT=ON`) and custom Formats composed from
+Core's field encodings.
 
 All Lua source paths on this page are relative to `opentlv-lua`.
 
@@ -78,6 +79,27 @@ overwrite callback state.
 The codec suite also runs under `busted tests` and checks
 every exported static descriptor. Structure codecs remain outside this
 Value-codec binding.
+
+## Format composition implementation
+
+`src/formats/compose.c` reads `opentlv.formats.compose()` and
+`opentlv.formats.packed()` configuration tables into the Core field encoding,
+composition and packed layout structures, then initializes the descriptor with
+the matching Core composition. A composed Format is one larger userdata block
+that begins with the common `tlv_lua_format_t`; the configuration, policies,
+tag-only identifiers and the packed identifier table follow it in the same
+allocation. Core borrows them for the descriptor's lifetime, and every Format
+consumer retains the userdata, so no finalizer or C heap allocation is needed.
+Borrowed configuration strings stay rooted on the Lua stack until they are
+copied, and argument errors cannot leak storage. Encoding pairs without a
+dedicated Core composition use small adapters that only forward each field to
+its `tlv/field/` read or write primitive.
+
+`src/format.c` binds the canonical Format operations for every Format, and
+`src/error.c` copies `tlv_format_error_t` detail into the raised error table.
+`tests/compose_spec.lua` runs under busted and checks compositions, policies,
+tag-only framing, configuration rejection and snapshots, every Format entry
+point and retained lifetimes. CTest also runs `examples/compose.lua`.
 
 ## Writer implementation
 

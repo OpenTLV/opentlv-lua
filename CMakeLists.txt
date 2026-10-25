@@ -38,6 +38,7 @@ add_library(opentlv_lua MODULE
     src/format.c
     src/format.h
     src/formats/fixed.c
+    src/formats/compose.c
     src/reader.c
     src/reader.h
     src/query.c
@@ -272,6 +273,11 @@ if(OPENTLV_BUILD_LUA_TESTS)
         set_tests_properties(Integration_example_lua_parse PROPERTIES
             LABELS "integration;examples;lua"
             ENVIRONMENT "${_lua_test_environment}")
+        add_test(NAME Integration_example_lua_compose
+            COMMAND ${OPENTLV_LUA_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/examples/compose.lua")
+        set_tests_properties(Integration_example_lua_compose PROPERTIES
+            LABELS "integration;examples;lua" ENVIRONMENT "${_lua_test_environment}"
+            PASS_REGULAR_EXPRESSION "Hello, composed world!")
     else()
         message(STATUS "lua interpreter not found; skipping the Lua binding examples.")
     endif()

@@ -6,7 +6,8 @@ studying native C implementation contracts.
 
 The `opentlv` module is an experimental Lua binding for OpenTLV. It binds a
 Reader, Writer, Tree Writer, Schema, tag/length/value `Element` tables and preorder tree
-traversal, borrowed Query and an owned mutable Document with checked Nodes.
+traversal, borrowed Query, an owned mutable Document with checked Nodes and
+[custom Formats](#custom-formats) composed from Core's field encodings.
 Pull/resumable Tree Reader and Document Builder remain unbound; see the
 [binding matrix](https://github.com/OpenTLV/opentlv/blob/main/docs/concepts/bindings.md#capability-implementation-matrix) and
 [Lua development guide](implementation.md).
@@ -57,7 +58,7 @@ tag within `data`. `format` defaults to `opentlv.formats.ber`; pass
 `opentlv.formats.ber`, `.cer`, `.der`, `.bluetooth_ltv`, or
 `opentlv.formats.fixed(tag_size, length_size, byte_order)` (`byte_order` is
 `"big"` or `"little"`, equivalent to the C `tlv_fixed_format_t`) for another
-wire format. Constructed elements are not expanded automatically; construct a
+wire format, or a [custom composed Format](#custom-formats). Constructed elements are not expanded automatically; construct a
 new reader over `element.value` to descend, as in the runnable example below.
 
 The explicit method form, `reader:next()` (`nil` at the end) and
@@ -212,6 +213,138 @@ if not ok then
     print(err.code, err.message, err.required, err.available)
 end
 ```
+
+## Custom formats
+
+`opentlv.formats.compose(config)` composes a Format from one identifier
+encoding and one length encoding without writing C, and
+`opentlv.formats.packed(config)` packs Tag and Length bits into one header
+integer. The configuration tables mirror Core's `tlv/field/*.h` and
+`tlv/formats/*.h` structures. Core validates them and implements all framing;
+Lua only reads the tables.
+
+```lua
+local tlv = require("opentlv")
+-- One-byte tags; lengths below 0xFF inline, otherwise 0xFF and two bytes.
+local format = tlv.formats.compose {
+    tag = {kind = "fixed", size = 1},
+    length = {kind = "escaped", escape = 0xFF, extended_size = 2},
+    constructed = {byte_index = 0, mask = 0x80, value = 0x80},
+}
+assert(format:encode(string.char(1), "Hello") == string.char(1, 5) .. "Hello")
+local document = tlv.document(format:encode(string.char(0x81), ""), format)
+```
+
+`config.tag` and `config.length` are required tables selected by `kind`:
+
+| Field | `kind` | Options |
+| --- | --- | --- |
+| `tag` | `"fixed"` | `size`: identifier width in bytes (`tlv_fixed_identifier_t`) |
+| `tag` | `"variable"` | `inline_mask`, `escape`, `continuation_bit`, `payload_mask`, `max_size` and an optional `policy` (`tlv_variable_identifier_t`) |
+| `length` | `"fixed"` | `size` (1–8) and `byte_order` (`tlv_fixed_length_t`) |
+| `length` | `"variable"` | `long_form_bit`, `payload_mask`, `byte_order` and an optional `policy` (`tlv_variable_length_t`) |
+| `length` | `"escaped"` | `escape`, `extended_size`, `byte_order`, `min_extended` and `max_length` (`tlv_escaped_length_t`) |
+
+Options without a default below are required. `byte_order` is `"big"`
+(default) or `"little"`. An identifier `policy` takes `forbidden_leading`, a
+binary string of rejected first bytes (default empty), and the booleans
+`reject_zero_first_payload` and `require_minimal` (default `false`). A length
+`policy` takes the booleans `allow_short` and `allow_long` (default `true`) and
+`require_minimal` (default `false`), `max_long_octets` (default 8) and
+`max_value` (default `math.huge`, no limit). An escaped length's `min_extended`
+defaults to zero and `max_length` to the largest `extended_size`-byte count.
+
+Optional composition fields:
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `element_order` | `"tlv"` | `"ltv"` places the length before the identifier |
+| `length_scope` | `"value"` | `"tag_and_value"` makes the count cover the identifier's wire bytes too |
+| `tag_only` | `nil` | Dense array of binary identifiers encoded without Length and Value; they need an empty Value, TLV order and value scope |
+| `constructed` | `nil` | `{byte_index, mask, value}`: an element is constructed when identifier byte `byte_index` (zero-based, default 0) masked with `mask` equals `value`; without it every Value is opaque |
+
+The encoding pair selects Core's composition: fixed identifier and fixed
+length use `tlv_fixed_format_init()` or, with `tag_only`,
+`tlv_tagged_binary_format_init()`; variable identifier and variable length use
+`tlv_variable_format_init()` or `tlv_variable_fields_init()` with
+`tlv_tagged_fields_format_init()`; a fixed identifier with an escaped length uses
+`tlv_escaped_format_init()`. Other pairs compose the field primitives through
+`tlv_fields_format_init()` or `tlv_tagged_fields_format_init()`.
+
+```lua
+-- LLDP framing: a 7-bit type above a 9-bit length in one big-endian header.
+local lldp = tlv.formats.packed {
+    header_size = 2,
+    tag = {bit_offset = 9, bit_width = 7},
+    length = {bit_offset = 0, bit_width = 9},
+}
+local element = lldp:decode(string.char(6, 2, 0, 120)) -- tag string.char(3)
+```
+
+A packed layout (`tlv_packed_layout_t`) requires `header_size` (1–8 bytes) and
+`tag` and `length` tables with `bit_offset` (from the least significant header
+bit) and `bit_width`. Optional `byte_order`, `length_scope` and `constructed`
+have the meanings above. Decoded Tags are the field value as `tag_size`
+big-endian bytes, by default the fewest bytes holding the tag's `bit_width`.
+The binding owns the canonical identifier table Core borrows, with one entry
+per tag value, so tag fields are limited to 16 bits. The layout is checked with
+`tlv_packed_layout_validate()`.
+
+Integers follow the [codec integer rules](#integers-and-configured-codecs).
+Invalid configuration rejected by Core raises `opentlv.Error` with
+`INVALID_ARG`; missing or mistyped options, unknown `kind`, order or scope
+strings and packed tag fields wider than 16 bits raise Lua errors. Both
+constructors snapshot their tables: the Format userdata owns its descriptor,
+configuration, policies and identifier tables, so later changes to the tables
+do not change it. Readers, Writers, Documents, Query matchers and programs
+retain the Format they use. As with Fixed formats, reuse the same Format
+object for a compiled Query program and the Documents it evaluates.
+`tostring()` reports `opentlv.Format<composed>` or `opentlv.Format<packed>`.
+
+### Format operations
+
+Every Format, builtin, fixed or composed, exposes the C `tlv_format_t`
+operations independently of Reader and Writer:
+
+| Method | Result |
+| --- | --- |
+| `can_read()`, `can_write()` | Whether the Format decodes, or measures and encodes (`tlv_format_can_read()`, `tlv_format_can_write()`) |
+| `decode(data)` | `element, size` for one complete element at the start of `data` (`tlv_format_decode()`); `element` has the Reader fields with offset zero, `size` is the consumed byte count and trailing bytes are not read |
+| `measure(tag, value)` | `{header, value, trailer, total}` logical sizes (`tlv_format_measure()`) |
+| `encode(tag, value)` | Encoded element as a new string (`tlv_format_encode()`) |
+
+`tag` and `value` are binary strings; a `nil` Tag is an absent identifier, as
+for Writer. Failures raise `opentlv.Error` with `operation` (`"decode"`,
+`"measure"` or `"encode"`) and the Format's own detail: `region` (`"header"`,
+`"tag"`, `"length"`, `"value"` or `"trailer"`) and, when known, `offset`,
+`required` and `tag_range`, `length_range` and `value_range` as
+`{offset, size}` tables. Decode offsets are relative to the input; measure and
+encode offsets to the would-be output. Empty input raises `END` without
+detail.
+
+### Packed bit fields
+
+`tlv.fields.read_packed(field, data)` extracts one unsigned bit field from the
+`header_size`-byte integer at the start of `data` (`tlv_packed_field_read()`).
+`tlv.fields.write_packed(field, data, value)` returns a copy of `data` with the
+field replaced, keeping every other bit (`tlv_packed_field_write()`). `field`
+is `{header_size, bit_offset, bit_width, byte_order}`, with `byte_order`
+defaulting to `"big"`.
+
+```lua
+local flags = {header_size = 1, bit_offset = 5, bit_width = 3}
+assert(tlv.fields.read_packed(flags, string.char(0xA4)) == 5)
+assert(tlv.fields.write_packed(flags, string.char(0xA4), 2) == string.char(0x44))
+```
+
+Values follow the codec integer rules. Short input raises `TRUNCATED`, short
+output `BUFFER_TOO_SHORT`, a value wider than the field `OVERFLOW` and an
+invalid field `INVALID_ARG`.
+
+Runnable version, using one composed Format with Tree Writer, traversal,
+Query and Document:
+[compose.lua](../examples/compose.lua)
+(`lua examples/compose.lua`).
 
 ## Structural schemas
 
