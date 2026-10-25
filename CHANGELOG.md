@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Report pinned Core API coverage in PR and Full CI as a non-blocking job: `TLV_API` functions and data referenced from the native module sources in `src`, in total and per header, for core and builtins separately; added and removed symbols when a pull request changes the Core pin; and a documented ignore list for primitives and diagnostic producers in `cmake/api-coverage.json`. The script is the Python and Rust repositories' standard-library report with `cmake/api-coverage.json` as its default configuration and a statement that symbol references do not prove functional parity; core coverage of Core `d87dcf96b270` is 118/254 (46.5 %). (#26)
 - Notify Docs after successful Main CI when Lua documentation or examples change, using attempt-bound evidence and a separate dispatch workflow. (OpenTLV/opentlv-docs#42)
 - Notify Docs after verified GitHub releases using exact release, commit and workflow-attempt evidence. (OpenTLV/opentlv-docs#42)
 - Align Lua PR, Main, Full and Release gates with runtime and sanitizer coverage, verified Core dependencies, validated module packages and CI timing evidence. (#13)
