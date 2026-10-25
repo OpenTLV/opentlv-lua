@@ -27,8 +27,7 @@ jobs:
     uses: ./.github/workflows/lua-codeql.yml
   api_coverage:
     name: Core API coverage
-    # Informational until the coverage epic (#25) sets a threshold; not a gate prerequisite.
-    continue-on-error: true
+    # Fails when a generic Core symbol is neither bound nor a reviewed exclusion (#31).
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -49,6 +48,7 @@ jobs:
           if [[ -n "$BASE_SHA" ]]; then coverage_command+=(--base "$BASE_SHA"); fi
           "${coverage_command[@]}"
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: lua-api-coverage-${{ inputs.tier }}-${{ github.run_attempt }}
           path: build/api-coverage.json
@@ -56,7 +56,7 @@ jobs:
   gate:
     name: Lua quality gate
     if: always()
-    needs: [build, quality, codeql]
+    needs: [build, quality, codeql, api_coverage]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5

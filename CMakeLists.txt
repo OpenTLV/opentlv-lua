@@ -33,6 +33,8 @@ add_library(opentlv_lua MODULE
     src/codec.c
     src/codec.h
     src/codec_builtin.c
+    src/definition.c
+    src/definition.h
     src/error.c
     src/error.h
     src/format.c
@@ -279,6 +281,14 @@ if(OPENTLV_BUILD_LUA_TESTS)
                 "${CMAKE_CURRENT_SOURCE_DIR}/tests/codec_generator_spec.lua" --allocator)
         set_tests_properties(Integration_lua_codec_generator
             Integration_lua_codec_generator_allocator PROPERTIES
+            LABELS "integration;lua" ENVIRONMENT "${_lua_test_environment}")
+        add_test(NAME Integration_lua_definition_path
+            COMMAND ${OPENTLV_LUA_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests/definition_path_spec.lua")
+        add_test(NAME Integration_lua_definition_path_allocator
+            COMMAND ${OPENTLV_LUA_EXECUTABLE}
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/definition_path_spec.lua" --allocator)
+        set_tests_properties(Integration_lua_definition_path
+            Integration_lua_definition_path_allocator PROPERTIES
             LABELS "integration;lua" ENVIRONMENT "${_lua_test_environment}")
         add_test(NAME Integration_lua_nfc_type2
             COMMAND ${OPENTLV_LUA_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests/nfc_type2.lua")

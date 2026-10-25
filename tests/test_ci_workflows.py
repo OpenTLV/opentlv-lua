@@ -30,7 +30,7 @@ class Workflows(unittest.TestCase):
     def test_always_gate_and_release_dependencies(self):
         gate = workflow('lua-checks.yml')['jobs']['gate']
         self.assertEqual(gate['if'], 'always()')
-        self.assertEqual(set(gate['needs']), {'build', 'quality', 'codeql'})
+        self.assertEqual(set(gate['needs']), {'build', 'quality', 'codeql', 'api_coverage'})
         jobs = workflow('release.yml')['jobs']
         self.assertEqual(jobs['full-ci']['uses'], './.github/workflows/lua-full.yml')
         self.assertEqual(set(jobs['publish']['needs']), {'full-ci', 'assemble'})

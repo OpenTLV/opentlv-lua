@@ -30,6 +30,8 @@ EXPECTED_TESTS = {
     "Integration_lua_document_query_schema_allocator",
     "Integration_lua_codec_generator",
     "Integration_lua_codec_generator_allocator",
+    "Integration_lua_definition_path",
+    "Integration_lua_definition_path_allocator",
     "Integration_lua_nfc_type2",
     "Integration_lua_components",
     "Integration_example_lua_quick_start",

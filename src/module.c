@@ -28,6 +28,7 @@
 #include "common.h"
 #include "codec.h"
 #include "compat.h"
+#include "definition.h"
 #include "error.h"
 #include "format.h"
 #include "generator.h"
@@ -61,6 +62,7 @@ int luaopen_opentlv__core(lua_State* L) {
     opentlv_lua_register_error_codes(L, module_index);
     opentlv_lua_open_codec(L, module_index);
     opentlv_lua_open_format(L, module_index);
+    opentlv_lua_open_definition(L, module_index);
     opentlv_lua_open_reader(L, module_index);
     opentlv_lua_open_schema(L, module_index);
     opentlv_lua_open_writer(L, module_index);

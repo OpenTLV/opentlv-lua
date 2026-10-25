@@ -150,7 +150,7 @@ class Release(unittest.TestCase):
                                query=True, metadata={'binding_version': '0.2.0', 'release_tag': 'v0.2.0',
                                                      'binding_revision': request['commit'], 'dirty': False})
             quality = dict(identity(), schema=1, tier='full', configuration={'known': 'hash'}, records=evidence,
-                           checks={key: {'result': 'success'} for key in ('build', 'quality', 'codeql')})
+                           checks={key: {'result': 'success'} for key in ('build', 'quality', 'codeql', 'api_coverage')})
             with patch.object(release, 'preflight', return_value=request), \
                     patch.object(release, 'configuration', return_value={'known': 'hash'}), \
                     patch.object(release, 'run') as command:

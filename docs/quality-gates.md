@@ -10,9 +10,9 @@ or enables its native tests.
 
 | Entry point | Trigger | Required checks |
 | --- | --- | --- |
-| `lua-pr.yml` | PR to `main` | Linux Lua 5.4 Debug, all Lua tests and Query facade corpus, formatting, clang-tidy, cppcheck, Python tooling regressions, Lua syntax and CodeQL; informational Core API coverage |
+| `lua-pr.yml` | PR to `main` | Linux Lua 5.4 Debug, all Lua tests and Query facade corpus, formatting, clang-tidy, cppcheck, Python tooling regressions, Lua syntax, CodeQL and Core API completeness |
 | `lua-main.yml` | Push to `main` | One Linux Lua 5.4 build; module identity, version and public Reader smoke; documentation change evidence after the gate |
-| `lua-full.yml` | Manual dispatch or Release call | Complete runtime/platform matrix, shared Core, LuaRocks, installed Core consumption, module packages, ASan/UBSan and all source checks; informational Core API coverage |
+| `lua-full.yml` | Manual dispatch or Release call | Complete runtime/platform matrix, shared Core, LuaRocks, installed Core consumption, module packages, ASan/UBSan, all source checks and Core API completeness |
 | `release.yml` | Manual dispatch from `main`, only `tag` | Closed changelog, dispatch SHA, locked authenticated Core release, fresh Full CI, checksummed and attested packages, Git tag and GitHub Release |
 
 PR has no path filters or branch-push trigger. Full has no push or schedule
@@ -137,10 +137,15 @@ remain separate work; the development rockspec stays `scm-1`.
 ## Core API coverage
 
 `Core API coverage` reports how much of the pinned Core's public API the native
-Lua module uses. It runs in PR and Full, not Main. The job is informational: it
-uses `continue-on-error`, is not a `Lua quality gate` prerequisite and has no
-threshold yet. The coverage epic (#25) tracks raising it. The PR and Full
-timings record it as `checks / Core API coverage`.
+Lua module uses. It runs in PR and Full, not Main, and is a `Lua quality gate`
+prerequisite. `cmake/api-coverage.json` lists `core` as `complete`, so the job
+fails when a generic Core symbol is neither referenced nor a reviewed
+exclusion, or when an ignore pattern matches nothing. It writes and uploads its
+report before failing. Builtins coverage stays informational. The PR and Full
+timings record it as `checks / Core API coverage`. The
+[Core API coverage record](api-coverage.md) is the reviewed baseline: every
+core header with its public Lua API and binding tests, the exclusions, the
+limitations and the procedure for Core pin updates.
 
 [`scripts/api_coverage.py`](../scripts/api_coverage.py) is the binding-agnostic
 script of the Python and Rust repositories, with `cmake/api-coverage.json` as
@@ -214,9 +219,13 @@ references them. The current entries are:
 - `tlv_schema_check`, which `tlv_schema_prepare()` runs before keeping the
   checked handle. Schemas are immutable snapshots, so `schema:check()` prepares
   once and a separate definition-only check adds no operation.
+- `tlv_location_translate`, which adds a byte origin the caller supplies to a
+  location. Lua has no caller-owned destinations or sub-buffer origins: every
+  entry point passes Core the Lua string it received or owned output, and
+  reports Core's coordinates unchanged.
 
-Patterns that match nothing in the pinned Core are reported, so stale entries
-are visible after a pin bump. Change the ignore list only for symbols the
+Patterns that match nothing in the pinned Core fail the job, so stale entries
+are removed after a pin bump. Change the ignore list only for symbols the
 binding intentionally leaves unbound.
 
 The first report, for Core `d87dcf96b270` (15 commits after 0.7.1), references
@@ -286,7 +295,12 @@ the same pin is 202 of 205 symbols (98.5 %) with 92 ignored:
 | `tlv/codec/structure.h` | 2/2 | 0 | `structure_codec()` |
 | `tlv/generator.h` | 2/2 | 0 | `generator()`, `generate()`, `workspace_size()` |
 
-The three remaining symbols are the scope of #31.
+The final coverage review (#31) binds `tlv_definition_find` through
+`definition_registry()` and `tlv_diagnostic_path_string` through `path_text`,
+excludes `tlv_location_translate` and makes core completeness a gate. Core
+coverage of the same pin is 204 of 204 symbols (100.0 %) with 93 ignored;
+Builtins stay at 61 of 291 (21.0 %). The [coverage record](api-coverage.md)
+holds the complete per-header inventory.
 
 Run it locally from the repository root:
 
@@ -300,7 +314,8 @@ Without `--core`, the script caches the shallow Core fetch in
 `build/api-coverage/core.git`. `--core` reads an existing Core checkout instead;
 the requested commits must already be there. `--commit` measures a different
 Core revision than the lock. `--base` reads the lock at a binding revision, and
-`--base-commit` names a previous Core revision directly. The parsing, ignore,
+`--base-commit` names a previous Core revision directly. The script exits with
+status 1 when a `complete` scope fails. The parsing, ignore, completeness,
 pin-diff and workflow logic is covered by `tests/test_api_coverage.py`.
 
 ## Timings and acceptance
