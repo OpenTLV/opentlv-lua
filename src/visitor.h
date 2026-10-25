@@ -5,6 +5,12 @@
 #define OPENTLV_LUA_VISITOR_H
 
 #include "compat.h"
+#include "format.h"
+
+#include <tlv/reader/tree.h>
+
+/* Element budget of tree traversal when the caller sets none. */
+#define OPENTLV_LUA_DEFAULT_MAX_ELEMENTS ((size_t)65536)
 
 /* Registers visit(data, format, callback), a sequential C Reader visitor,
  * and module_table["visit_tree"], the opentlv.visit_tree(data, format,
@@ -13,5 +19,15 @@
  * limits only. module_table must be on top of the stack; the stack is
  * unchanged on return. Call once from luaopen_opentlv__core(). */
 void opentlv_lua_open_visitor(lua_State* L, int module_table_index);
+
+/* Resumes the Visitor of an initialized Reader (`tree` NULL) or Tree Reader
+ * (`reader` NULL) with the function at `callback_index`, called as
+ * callback(element) or callback(element, depth) like opentlv.visit() and
+ * opentlv.visit_tree(). *busy is nonzero while native traversal runs, so the
+ * cursor's methods can reject reentry from the callback. Returns
+ * `visited, stopped`, or propagates a callback error unchanged and raises
+ * traversal failures, including need-more-data, after releasing the callback. */
+int opentlv_lua_visit_cursor(lua_State* L, tlv_lua_format_t* format, tlv_reader_t* reader,
+                             tlv_tree_reader_t* tree, int callback_index, int* busy);
 
 #endif /* OPENTLV_LUA_VISITOR_H */

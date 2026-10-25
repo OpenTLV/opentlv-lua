@@ -13,7 +13,8 @@ import zipfile
 from ci_support import ROOT, digest, read, require, write
 
 PACKAGE_TESTS = ('smoke.lua', 'version.lua', 'codec_spec.lua', 'query_document_spec.lua',
-                 'schema_spec.lua', 'writer_spec.lua', 'visitor_spec.lua', 'program_spec.lua')
+                 'schema_spec.lua', 'writer_spec.lua', 'stream_spec.lua', 'visitor_spec.lua',
+                 'program_spec.lua')
 
 
 def package(build, lua, core, identifier, evidence, release):

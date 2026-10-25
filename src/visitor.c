@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Marek Cingel
 
 #include <stdlib.h>
+#include <string.h>
 #include "visitor.h"
 #include "common.h"
 #include "error.h"
@@ -11,8 +12,6 @@
 #include <tlv/builtins/asn1/der_validation.h>
 #endif
 #include <tlv/reader/visitor.h>
-
-#define OPENTLV_LUA_DEFAULT_MAX_ELEMENTS ((size_t)65536)
 
 /* Synchronous state: neither Lua nor the core retains this pointer. Input and
  * Format remain rooted in the outer call's arguments throughout traversal. */
@@ -74,34 +73,64 @@ static tlv_visit_result_t sequential_trampoline(const tlv_element_t* element, vo
     visitor_ctx_t*     ctx = (visitor_ctx_t*)context;
     tlv_visit_result_t result = visitor_trampoline(element, 0, ctx->offset, context);
     /* Reader consumed the complete wire element, including any trailer. */
-    ctx->offset = ctx->reader->pos;
+    ctx->offset = tlv_reader_offset(ctx->reader);
     return result;
 }
 
-static size_t limit_option(lua_State* L, const char* name, size_t fallback) {
-    if (lua_isnoneornil(L, 4)) return fallback;
-    lua_getfield(L, 4, name);
-    if (lua_isnil(L, -1)) {
-        lua_pop(L, 1);
-        return fallback;
+/* Pushes the protected invoker and the error slot, and references the
+ * callback at `callback_index` (zero for none). Raises only before any native
+ * traversal state exists. */
+static void ctx_begin(lua_State* L, visitor_ctx_t* ctx, tlv_lua_format_t* format, int tree,
+                      int callback_index) {
+    memset(ctx, 0, sizeof(*ctx));
+    ctx->L = L;
+    ctx->format = format;
+    ctx->tree = tree;
+    ctx->callback_ref = LUA_NOREF;
+    luaL_checkstack(L, 4, "visitor stack");
+    lua_pushcfunction(L, invoke_callback);
+    ctx->invoke_index = lua_gettop(L);
+    lua_pushnil(L);
+    ctx->error_index = lua_gettop(L);
+    if (callback_index) {
+        lua_pushvalue(L, callback_index);
+        ctx->callback_ref = luaL_ref(L, LUA_REGISTRYINDEX);
     }
-    luaL_checktype(L, -1, LUA_TNUMBER);
-#if LUA_VERSION_NUM >= 503
-    if (lua_isinteger(L, -1)) {
-        lua_Integer value = lua_tointeger(L, -1);
-        if (value < 0 || (uintmax_t)value > SIZE_MAX)
-            luaL_error(L, "%s must be a nonnegative native integer", name);
-        lua_pop(L, 1);
-        return (size_t)value;
+}
+
+/* Releases the callback, then propagates a callback error unchanged, raises
+ * a traversal failure, or returns `visited, stopped`. */
+static int ctx_finish(lua_State* L, visitor_ctx_t* ctx, tlv_result_t code,
+                      const tlv_reader_diagnostic_t* diagnostic) {
+    luaL_unref(L, LUA_REGISTRYINDEX, ctx->callback_ref);
+    if (ctx->failed) {
+        lua_pushvalue(L, ctx->error_index);
+        return lua_error(L);
     }
-#endif
-    lua_Number value = lua_tonumber(L, -1);
-    if (!(value >= 0 && value < (lua_Number)SIZE_MAX))
-        luaL_error(L, "%s must be a nonnegative native integer", name);
-    size_t result = (size_t)value;
-    if ((lua_Number)result != value) luaL_error(L, "%s must be an integer", name);
-    lua_pop(L, 1);
-    return result;
+    if (code != TLV_OK) return opentlv_lua_raise_reader_error(L, code, diagnostic);
+    lua_pushinteger(L, (lua_Integer)ctx->visited);
+    lua_pushboolean(L, ctx->stopped);
+    return 2;
+}
+
+int opentlv_lua_visit_cursor(lua_State* L, tlv_lua_format_t* format, tlv_reader_t* reader,
+                             tlv_tree_reader_t* tree, int callback_index, int* busy) {
+    visitor_ctx_t ctx;
+    ctx_begin(L, &ctx, format, tree != NULL, callback_index);
+    tlv_reader_diagnostic_t diagnostic;
+    tlv_reader_diagnostic_init(&diagnostic);
+    tlv_result_t code;
+    *busy = 1;
+    if (tree) {
+        code = tlv_tree_reader_visit(tree, visitor_trampoline, &ctx, &diagnostic);
+    } else {
+        ctx.reader = reader;
+        ctx.offset = tlv_reader_offset(reader);
+        code = tlv_reader_visit_diag(reader, sequential_trampoline, &ctx, &diagnostic);
+        ctx.reader = NULL;
+    }
+    *busy = 0;
+    return ctx_finish(L, &ctx, code, &diagnostic);
 }
 
 static int visit(lua_State* L, int tree) {
@@ -122,23 +151,11 @@ static int visit(lua_State* L, int tree) {
     }
 #endif
     if (tree) {
-        max_depth = limit_option(L, "max_depth", max_depth);
-        max_elements = limit_option(L, "max_elements", max_elements);
+        max_depth = opentlv_lua_size_option(L, 4, "max_depth", max_depth);
+        max_elements = opentlv_lua_size_option(L, 4, "max_elements", max_elements);
     }
-    visitor_ctx_t ctx = {0};
-    ctx.L = L;
-    ctx.format = format;
-    ctx.tree = tree;
-    ctx.callback_ref = LUA_NOREF;
-    luaL_checkstack(L, 4, "visitor stack");
-    lua_pushcfunction(L, invoke_callback);
-    ctx.invoke_index = lua_gettop(L);
-    lua_pushnil(L);
-    ctx.error_index = lua_gettop(L);
-    if (has_callback) {
-        lua_pushvalue(L, 3);
-        ctx.callback_ref = luaL_ref(L, LUA_REGISTRYINDEX);
-    }
+    visitor_ctx_t ctx;
+    ctx_begin(L, &ctx, format, tree, has_callback ? 3 : 0);
 
     tlv_result_t            code;
     tlv_reader_diagnostic_t tree_diagnostic = {0};
@@ -182,18 +199,7 @@ static int visit(lua_State* L, int tree) {
         }
     }
 
-    luaL_unref(L, LUA_REGISTRYINDEX, ctx.callback_ref);
-    if (ctx.failed) {
-        lua_pushvalue(L, ctx.error_index);
-        return lua_error(L);
-    }
-    if (code != TLV_OK) {
-        if (!tree) return opentlv_lua_raise_reader_error(L, code, &diagnostic);
-        return opentlv_lua_raise_reader_error(L, code, &tree_diagnostic);
-    }
-    lua_pushinteger(L, (lua_Integer)ctx.visited);
-    lua_pushboolean(L, ctx.stopped);
-    return 2;
+    return ctx_finish(L, &ctx, code, tree ? &tree_diagnostic : &diagnostic);
 }
 
 static int l_visit(lua_State* L) {

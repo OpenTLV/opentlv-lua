@@ -186,6 +186,21 @@ references them. The current entries are:
   `tlv_escaped_format_init()` and `tlv_variable_format_init()` install in a
   descriptor. Core calls them through the descriptor, so Lua has no separate
   path; the initializers themselves remain counted.
+- the Reader, Writer and Tree Writer wrappers that call their bound `_diag`
+  counterpart with a NULL diagnostic (`tlv_read`, `tlv_reader_next`,
+  `tlv_reader_visit`, `tlv_tree_reader_next`, `tlv_tree_reader_next_event`,
+  `tlv_element_encoded_size`, `tlv_writer_write_element`,
+  `tlv_writer_copy_encoded`, `tlv_writer_preserve`, `tlv_tree_writer_begin`,
+  `tlv_tree_writer_end`, `tlv_tree_writer_write_element` and
+  `tlv_tree_writer_write_event`). Lua always raises structured diagnostics.
+- the Tag/Value write forms (`tlv_write`, `tlv_write_diag`, `tlv_writer_write`,
+  `tlv_writer_write_diag`), which build an Element for the Element entry
+  points that `Writer:write()` calls directly.
+- `tlv_write_element` and `tlv_write_element_diag`, which encode one element
+  into caller-owned storage. Lua strings are immutable, so there is no caller
+  destination; `format:encode()` calls `tlv_format_encode()`, which they use.
+- `tlv_writer_copy_element`, which is `tlv_writer_write_element()` without
+  diagnostics after the same checks.
 
 Patterns that match nothing in the pinned Core are reported, so stale entries
 are visible after a pin bump. Change the ignore list only for symbols the
@@ -213,6 +228,20 @@ symbols (62.6 %) with 62 ignored:
 | `tlv/formats/fixed.h` | 1/1 | 0 | `formats.fixed()`, `formats.compose()` |
 | `tlv/formats/packed.h` | 4/4 | 0 | `formats.packed()` |
 | `tlv/formats/variable.h` | 2/2 | 4 | `formats.compose()` |
+
+Streaming Reader, Writer and tree operations (#28) reference or ignore every
+symbol of `tlv/reader/*.h` and `tlv/writer/*.h`, and `tlv_source_preserve()`
+completes `tlv/format.h`. Core coverage of the same pin is 166 of 215 symbols
+(77.2 %) with 82 ignored:
+
+| Header | Referenced | Ignored | Lua API |
+| --- | ---: | ---: | --- |
+| `tlv/format.h` | 8/8 | 0 | Format methods, `source:preserve()` |
+| `tlv/reader/reader.h` | 11/11 | 2 | `reader()`, `read()`, `read_source()`, incremental input, `next_source()` |
+| `tlv/reader/tree.h` | 9/9 | 2 | `tree_reader()` |
+| `tlv/reader/visitor.h` | 2/2 | 1 | `visit()`, `visit_tree()`, `reader:visit()`, `tree_reader:visit()` |
+| `tlv/writer/writer.h` | 10/10 | 11 | `writer()`, `copy_encoded()`, `preserve()`, `encoded_size()` |
+| `tlv/writer/tree.h` | 10/10 | 4 | `tree_writer()`, `write_event()`, `measure_tree()`, `measure_events()` |
 
 Run it locally from the repository root:
 
