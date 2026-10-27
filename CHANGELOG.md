@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Normalize Lua licensing and community policies to the Workspace reference: `REUSE.toml` and `LICENSES/MIT.txt` cover every file, listing documentation, JSON data and the byte-preserved migration records (the initial source inventory and the historical README) by exact path, and the rockspec, clang-format, clang-tidy, pre-commit and Git configuration and `requirements-dev.txt` gain SPDX headers. The pre-commit hooks of the source quality job run `reuse lint` with REUSE 6.2.0, and licensing regression tests reject glob or stale annotations, a changed historical README, a license text differing from `LICENSE`, a rockspec without `MIT` and OpenTLV as a copyright holder. The README and the development guide state Marek Cingel's copyright, contributor ownership, the license notices of module archives, the rock and binaries that statically link Core, and the shared `OpenTLV/.github` contribution, conduct, security and support policies. (#38)
 - Report the independent Lua binding version through `version()` and `_VERSION`, using the same generated value as package/release metadata, with Lua checks for build and installed package consistency. Core identity remains in build/release provenance only. (#18)
 - Require all stable Core features supported by Lua in every official build, remove Core feature selection, reject incomplete Core packages, and align component checks and documentation with the single full-featured configuration. (#16)
 

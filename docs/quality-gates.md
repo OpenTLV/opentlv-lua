@@ -10,7 +10,7 @@ or enables its native tests.
 
 | Entry point | Trigger | Required checks |
 | --- | --- | --- |
-| `lua-pr.yml` | PR to `main` | Linux Lua 5.4 Debug, all Lua tests and Query facade corpus, formatting, clang-tidy, cppcheck, Python tooling regressions, Lua syntax, CodeQL and Core API completeness |
+| `lua-pr.yml` | PR to `main` | Linux Lua 5.4 Debug, all Lua tests and Query facade corpus, formatting, REUSE licensing metadata, clang-tidy, cppcheck, Python tooling regressions, Lua syntax, CodeQL and Core API completeness |
 | `lua-main.yml` | Push to `main` | One Linux Lua 5.4 build; module identity, version and public Reader smoke; documentation change evidence after the gate |
 | `lua-full.yml` | Manual dispatch or Release call | Complete runtime/platform matrix, shared Core, LuaRocks, installed Core consumption, module packages, ASan/UBSan, all source checks and Core API completeness |
 | `release.yml` | Manual dispatch from `main`, only `tag` | Closed changelog, dispatch SHA, locked authenticated Core release, fresh Full CI, checksummed and attested packages, Git tag and GitHub Release |

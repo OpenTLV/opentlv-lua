@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Marek Cingel
+
+version = 1
+
+# Documentation and JSON data, which cannot carry comments. Keep paths explicit
+# so new sources cannot silently bypass the source-header policy.
+[[annotations]]
+path = [
+    "CHANGELOG.md",
+    "README.md",
+    "cmake/api-coverage.json",
+    "cmake/core-artifact.json",
+    "cmake/core-features.json",
+    "cmake/lua-version.json.in",
+    "docs/api-coverage.md",
+    "docs/api.md",
+    "docs/ci-baseline.json",
+    "docs/development.md",
+    "docs/implementation.md",
+    "docs/migration.md",
+    "docs/quality-gates.md",
+    "docs/releases.md",
+    "docs/testing.md",
+    "docs/versioning.md",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Marek Cingel"
+SPDX-License-Identifier = "MIT"
+
+# Migration records imported from Core. The initial source inventory and the
+# historical README keep their original bytes, so they never receive headers.
+[[annotations]]
+path = [
+    "docs/migration/source-inventory.json",
+    "provenance/original-readme.md",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Marek Cingel"
+SPDX-License-Identifier = "MIT"

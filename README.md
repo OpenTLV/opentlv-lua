@@ -104,6 +104,8 @@ for credentials, retries and the separate versioned release publication flow.
 | `.github/workflows/release.yml` | Manual release verification and artifact publication |
 | `docs/migration/` | Initial source inventory |
 | `provenance/` | Byte-preserved historical README |
+| `LICENSE`, `LICENSES/`, `REUSE.toml` | MIT license, the license text for REUSE and the metadata of files without a header |
+| `.pre-commit-config.yaml`, `requirements-dev.txt` | Formatting, whitespace and REUSE hooks and the Python tools of the quality checks |
 
 The binding consumes the OpenTLV C API. Core remains responsible for shared
 architecture and native functionality. The standalone build supports both an
@@ -111,5 +113,22 @@ external Core dependency and an explicit local sibling Core checkout.
 
 ## License
 
-MIT; see [LICENSE](LICENSE). Imported sources retain their original copyright
-and SPDX notices.
+MIT; see [LICENSE](LICENSE). Marek Cingel holds copyright in his original
+contributions, including the binding migrated from Core; other contributors
+retain copyright in theirs. OpenTLV is a GitHub organization, not a copyright
+holder. Imported sources retain their original copyright and SPDX notices.
+Sources carry SPDX headers, and [`REUSE.toml`](REUSE.toml) covers the files
+that cannot carry one, so every tracked file has REUSE metadata. The module
+archives include the Lua and Core license texts, and the rock installs
+`LICENSE`. See [licensing](docs/development.md#contributing-and-licensing).
+
+## Community
+
+Contribution, conduct, security and support policies are shared across OpenTLV
+in [OpenTLV/.github](https://github.com/OpenTLV/.github); this repository has
+no local copies, so GitHub shows those defaults. The
+[development guide](docs/development.md#contributing-and-licensing) adds the
+Lua build, test and licensing instructions. Report suspected vulnerabilities
+privately as described in the
+[security policy](https://github.com/OpenTLV/.github/blob/main/SECURITY.md),
+not in public issues.
