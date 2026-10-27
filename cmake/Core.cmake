@@ -36,10 +36,10 @@ option(OPENTLV_BUILD_SHARED_LIBS "Build the source Core dependency as a shared l
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # The source override takes precedence over package discovery. Otherwise use an
-# installed package, then the exact migration baseline; never a moving branch.
+# installed package, then the exact released Core baseline; never a moving branch.
 FetchContent_Declare(opentlv_core
     GIT_REPOSITORY https://github.com/OpenTLV/opentlv.git
-    GIT_TAG d87dcf96b2707e817dd51163a9f9efa36651e929
+    GIT_TAG 345c77acb29266036df5f27d04ce315bb61853cc
     FIND_PACKAGE_ARGS CONFIG NAMES OpenTLV
 )
 set(OPENTLV_LUA_CORE_PACKAGE "" CACHE PATH "Explicit Core package directory (no source fallback)")

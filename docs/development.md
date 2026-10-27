@@ -13,7 +13,7 @@ Without an explicit `OPENTLV_LUA_CORE_PACKAGE`, Core is resolved in this order:
 
 1. Explicit `FETCHCONTENT_SOURCE_DIR_OPENTLV_CORE` checkout.
 2. Installed `OpenTLVConfig.cmake` package.
-3. Git fetch of `d87dcf96b2707e817dd51163a9f9efa36651e929` from
+3. Git fetch of `345c77acb29266036df5f27d04ce315bb61853cc` from
    `https://github.com/OpenTLV/opentlv.git`.
 
 Choose a separate build directory for each Core installation, Lua ABI, and

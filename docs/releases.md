@@ -17,10 +17,48 @@ selects the exact dispatch SHA, even if main advances during verification.
    skip-verification input is available. Existing tags, including another
    version tag on the candidate, are rejected.
 
-The current Core artifact release is deliberately unset: the migration pin
-does not identify an available attested producer release. Preflight rejects
-this state. Ordinary development remains usable; it does not count as Verified
-Source. See the [Core verification policy](quality-gates.md#core-verification).
+## Core v0.8.0 release candidate (#40)
+
+The next planned Lua release is **v0.2.0**, independently versioned from Core.
+On 2026-10-27 the only existing Lua tag was v0.1.0; recheck tag availability
+immediately before dispatch. The minor increment covers the public streaming,
+Format composition, Document, Query, Schema, codec and Generator APIs added
+since that baseline, together with the release and licensing work recorded in
+the changelog.
+
+Both dependency pins select [Core v0.8.0](https://github.com/OpenTLV/opentlv/releases/tag/v0.8.0)
+at `345c77acb29266036df5f27d04ce315bb61853cc` (Core release ID `425487758`).
+The Core release supplies a manifest, checksums and named source/binary archives;
+the resolver must authenticate them at execution time under the
+[Core verification policy](quality-gates.md#core-verification).
+Original migration records continue to identify the initial imported sources.
+
+The candidate changelog is closed as `## [v0.2.0] - 2026-10-27`.
+Before publication:
+
+1. Confirm the changelog date matches the actual release date, merge the
+   candidate and record its exact Lua SHA.
+2. Verify Main and Full on that SHA, including Core API completeness. Earlier
+   runs against the migration pin do not establish Core v0.8.0 compatibility.
+3. Dispatch `release.yml` on `main` with `tag=v0.2.0`. Its own Full run and
+   same-attempt evidence still govern publication.
+4. Verify the published tag resolves to the candidate, the release notes, both
+   `OpenTLV-Lua-0.2.0-{linux,windows}-x64-lua54.zip` archives,
+   `release-manifest.json`, `SHA256SUMS` and producer attestations. Inspect the
+   release receipt and Docs notification separately.
+5. Link the published release and gate evidence in
+   [Lua #40](https://github.com/OpenTLV/opentlv-lua/issues/40) and
+   [Core epic #718](https://github.com/OpenTLV/opentlv/issues/718).
+
+Local preparation on 2026-10-27 verified the Core manifest, checksums and source
+archive against their downloaded attestation bundles, requiring the Core
+release workflow and exact source commit. Linux GCC 13.3 / Lua 5.4.6 passed
+28/28 CTest entries, 165 Busted tests, 171 Query fixtures / 3422 checks,
+installed-Core smoke and extracted development-package checks. The 91 Python
+tests, API completeness and pre-commit checks also passed.
+
+A prepared pin update or a passing local suite is not a published release.
+LuaRocks upload is outside this candidate's publication requirements.
 
 ## Verification and publication
 

@@ -9,7 +9,9 @@ The Lua workflow does not run the Core test suite.
 
 The workflow and Lua Query generator were migrated from Core commit
 [`d87dcf96b2707e817dd51163a9f9efa36651e929`](https://github.com/OpenTLV/opentlv/tree/d87dcf96b2707e817dd51163a9f9efa36651e929).
-That is also the dependency pin in `cmake/Core.cmake`. The original Git blob
+The current dependency pin is Core v0.8.0 at
+`345c77acb29266036df5f27d04ce315bb61853cc` in `cmake/Core.cmake`;
+the migration identity is unchanged. The original Git blob
 SHA-256 digests are recorded below; checkout line-ending conversion can change
 working-file hashes.
 
@@ -72,7 +74,7 @@ from outside the checkout. Packaging uses static Core from the same source
 identity. The installed runtime search paths exclude inherited Lua initialization
 settings. Windows uses PowerShell/MSVC so Git Bash cannot shadow `link.exe`.
 
-The two official Lua 5.4 package configurations additionally run seven Lua scripts
+The two official Lua 5.4 package configurations additionally run twelve Lua scripts
 and the full Query corpus after extraction, with only the archive module paths.
 Allocator injection is exercised by the build suite, not shipped in the archive.
 
