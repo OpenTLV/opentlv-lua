@@ -12,6 +12,9 @@ import time
 
 from ci_support import api, require, write as write_json
 
+METADATA_ATTEMPTS = 18
+METADATA_RETRY_SECONDS = 10
+
 
 def seconds(start, end):
     return (datetime.fromisoformat(end.replace('Z', '+00:00')) -
@@ -44,9 +47,9 @@ def fetch_jobs(repo, run, attempt):
 def measure(repo, run, attempt, scope):
     # A dependent job can start before the Jobs API exposes completion metadata.
     # Refresh the same attempt instead of accepting an empty or partial Lua report.
-    for retry in range(6):
+    for retry in range(METADATA_ATTEMPTS):
         selected = fetch_jobs(repo, run, attempt)
-        ready = True
+        available_names = [job['name'] for job in selected]
         if scope == 'lua':
             gates = [job for job in selected if job['name'].endswith(' / Lua quality gate')]
             require(len(gates) <= 1, 'Expected one Lua gate in this run')
@@ -59,18 +62,31 @@ def measure(repo, run, attempt, scope):
             # Main/Release collection must also wait for every prerequisite's
             # metadata, excluding the collectors themselves (including nested Full).
             selected = [job for job in selected if not job['name'].endswith(' timings')]
-        ready = bool(selected) and all(
+        incomplete = [job for job in selected if not (
             job.get('conclusion') == 'skipped' or
             (job.get('status') == 'completed' and job.get('conclusion') and
-             job.get('started_at') and job.get('completed_at')) for job in selected)
+             job.get('started_at') and job.get('completed_at')))]
+        ready = bool(selected) and not incomplete
         measurable = any(job.get('started_at') and job.get('completed_at') and
                          job.get('conclusion') != 'skipped' for job in selected)
         if ready and measurable:
             return summarize(selected)
-        if retry < 5:
-            print('Job timing metadata is not ready; retrying the same run attempt in 5 seconds.', flush=True)
-            time.sleep(5)
-    raise ValueError('Job timing metadata remained incomplete after 6 attempts')
+        if not selected:
+            pending = 'No jobs selected; available job names: ' + json.dumps(available_names)
+        elif incomplete:
+            pending = 'Incomplete jobs: ' + json.dumps([
+                {key: job.get(key) for key in
+                 ('id', 'name', 'status', 'conclusion', 'started_at', 'completed_at')}
+                for job in incomplete])
+        else:
+            pending = 'No non-skipped jobs with both timestamps'
+        context = f'{repo} run {run} attempt {attempt} scope {scope}'
+        print(f'Job timing metadata is not ready ({retry + 1}/{METADATA_ATTEMPTS}; {context}). '
+              + pending, flush=True)
+        if retry < METADATA_ATTEMPTS - 1:
+            time.sleep(METADATA_RETRY_SECONDS)
+    raise ValueError(f'Job timing metadata remained incomplete after {METADATA_ATTEMPTS} attempts '
+                     f'({context}): {pending}')
 
 
 def main():

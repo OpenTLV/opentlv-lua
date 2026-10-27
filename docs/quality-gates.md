@@ -323,7 +323,12 @@ pin-diff and workflow logic is covered by `tests/test_api_coverage.py`.
 [Baseline evidence](ci-baseline.json) records actual job timestamps and URLs
 for the preceding successful PR, main push and tag-only release. Each new entry
 point uploads attempt-scoped timings even when checks fail. The collector
-retries delayed API metadata. Job seconds are elapsed runner time, not billed
+retries delayed API metadata up to 18 times with 10 seconds between requests
+to the same run attempt (170 seconds of waiting, plus API request time).
+Retries and terminal errors identify the selected scope and incomplete jobs;
+when the gate is absent, they list the available job names. Missing metadata
+still fails collection rather than publishing a partial report.
+Job seconds are elapsed runner time, not billed
 minutes; execution span includes scheduling gaps but excludes initial queue time.
 
 Compare matching event, runtime matrix, runner, toolchain and cache cohorts.
