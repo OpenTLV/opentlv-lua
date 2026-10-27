@@ -74,7 +74,8 @@ validated Lua 5.4 module archives and a `v`-prefixed tag.
 
 The initial sources were imported from OpenTLV Core commit
 [`d87dcf96b2707e817dd51163a9f9efa36651e929`](https://github.com/OpenTLV/opentlv/tree/d87dcf96b2707e817dd51163a9f9efa36651e929/bindings/lua).
-The standalone CMake build uses that same revision as its remote dependency pin.
+The standalone build now pins Core v0.8.0 at
+`345c77acb29266036df5f27d04ce315bb61853cc`. The initial import identity stays unchanged.
 See [migration provenance](docs/migration.md) for the original inventory and the
 additional shared binding helpers required by the standalone build.
 

@@ -108,11 +108,11 @@ Core-owned Query corpus/reference and LuaRocks check. The source archive's
 embedded version/SHA must match. GitHub's automatic source downloads are not
 substitutes for the attested named source asset.
 
-As inspected on 2026-10-19, Core release `0.7.1` has no uploaded assets, and the
-Lua migration pin predates the new producer. The artifact lock deliberately has
-no release tag. Development CI works, but release preflight fails until a
-reviewed matching Core release/SHA is selected in both pin files. Resolver
-fixtures are not evidence of actual attestation consumption.
+The artifact lock selects [Core v0.8.0](https://github.com/OpenTLV/opentlv/releases/tag/v0.8.0)
+at `345c77acb29266036df5f27d04ce315bb61853cc`, matching `cmake/Core.cmake`.
+Every CI build authenticates this release before selecting a compatible binary
+or Verified Source. Local compatibility tests and resolver fixtures do not
+replace successful hosted Full and same-attempt Release evidence.
 
 ## Module artifacts
 
@@ -124,7 +124,7 @@ builds, toolchains, libc or operating system versions.
 Each archive includes `opentlv/_core`, `opentlv/init.lua`, binding version
 metadata, compiler/dependency identity and original Lua/Core licenses. After
 extraction into a separate temporary tree, the runner loads only its module
-paths and runs eight Lua test scripts, including public version/metadata
+paths and runs twelve Lua test scripts, including public version/metadata
 consistency, plus the complete Query facade corpus.
 Native allocator injection remains in the build suite; the helper is not
 distributed. Shared Core configurations are tested separately.

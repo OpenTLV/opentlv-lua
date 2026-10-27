@@ -4,10 +4,13 @@ This is the reviewed baseline of the generic Core surface that the Lua
 `opentlv` module supports. It was recorded for issue
 [#31](https://github.com/OpenTLV/opentlv-lua/issues/31), which closes the
 [coverage epic #25](https://github.com/OpenTLV/opentlv-lua/issues/25), against
-Core commit `d87dcf96b2707e817dd51163a9f9efa36651e929` (15 commits after
-0.7.1), as pinned by [`core-artifact.json`](../cmake/core-artifact.json). The
-comparison baseline is Lua commit `9c27c7de77c4691e75b998f67d2778844eebcd13`,
-`main` before this issue's changes.
+the migration Core commit `d87dcf96b2707e817dd51163a9f9efa36651e929`.
+For [release preparation #40](https://github.com/OpenTLV/opentlv-lua/issues/40),
+the inventory was rechecked against Core v0.8.0 at
+`345c77acb29266036df5f27d04ce315bb61853cc`, now pinned by
+[`core-artifact.json`](../cmake/core-artifact.json): no added or removed
+`TLV_API` symbols and no stale exclusions. The original #31 comparison baseline
+is Lua commit `9c27c7de77c4691e75b998f67d2778844eebcd13`.
 
 Core coverage is **204/204 (100.0 %)** with 93 reviewed exclusions, up from
 202/205 (98.5 %) with 92. Builtins stay at **61/291 (21.0 %)**. Builtins parity

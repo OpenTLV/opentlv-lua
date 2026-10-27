@@ -48,15 +48,16 @@ the verified Core identity separately from the binding version.
 
 ## First standalone release baseline
 
-Lua binding versioning starts with the first release tag, **v0.1.0**. Until that
-tag is added, the binding remains an unversioned development build (`scm`),
-packaged by `opentlv-scm-1.rockspec`. No provisional numeric release version is
-assigned. The original tag-only quality gate established this initial baseline.
+Lua binding versioning started with the first release tag, **v0.1.0**.
+Untagged development builds remain `scm`, packaged by
+`opentlv-scm-1.rockspec`; no provisional numeric release version is assigned.
+The original tag-only quality gate established this initial baseline.
 The current [manual release workflow](releases.md) verifies and publishes later
 candidates only after Full CI succeeds. The migration's source,
 CMake, test, and LuaRocks migration baseline is Core commit
-`d87dcf96b2707e817dd51163a9f9efa36651e929`, which is also the pinned Core
-dependency. [Migration provenance](migration.md) records the source repository,
+`d87dcf96b2707e817dd51163a9f9efa36651e929`. The current dependency is Core
+v0.8.0 at `345c77acb29266036df5f27d04ce315bb61853cc`.
+[Migration provenance](migration.md) records the source repository,
 destination, inventory, and validation boundaries. The existing API and Lua
 5.1â€“5.4/LuaJIT compatibility are retained.
 

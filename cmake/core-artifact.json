@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "repository": "OpenTLV/opentlv",
-  "commit": "d87dcf96b2707e817dd51163a9f9efa36651e929",
-  "release_tag": null,
+  "commit": "345c77acb29266036df5f27d04ce315bb61853cc",
+  "release_tag": "v0.8.0",
   "allow_verified_source": true
 }
