@@ -326,8 +326,19 @@ point uploads attempt-scoped timings even when checks fail. The collector
 retries delayed API metadata up to 18 times with 10 seconds between requests
 to the same run attempt (170 seconds of waiting, plus API request time).
 Retries and terminal errors identify the selected scope and incomplete jobs;
-when the gate is absent, they list the available job names. Missing metadata
-still fails collection rather than publishing a partial report.
+when the gate is absent, they list the available job names.
+
+GitHub can leave a job marked `in_progress` even after every runner step is
+complete. For timing telemetry only, the collector can use the timestamp of
+the final successful `Complete job` step when every preceding step is terminal
+and has consistent timestamps (skipped steps need no timestamps). It checks
+the job's run and attempt before using this fallback. The report marks that
+job with `timing_source: completed_steps`, retains `api_status` and
+`api_completed_at`, and preserves the API's null `conclusion`. The measured
+`completed_at` is the terminal step's timestamp, not an API job-completion claim.
+This fallback does not authorize quality gates or releases and does not infer
+success from cleanup steps. Without complete job or terminal-step timing
+evidence, collection still fails rather than publishing a partial report.
 Job seconds are elapsed runner time, not billed
 minutes; execution span includes scheduling gaps but excludes initial queue time.
 

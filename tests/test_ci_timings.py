@@ -2,6 +2,7 @@
 # Copyright (c) 2026 Marek Cingel
 """Regressions for delayed Actions job metadata observed in PRs #20 and #41."""
 
+from copy import deepcopy
 from pathlib import Path
 import sys
 import unittest
@@ -17,7 +18,70 @@ def job(name, **changes):
             **changes}
 
 
+def stuck_job():
+    return job('checks / build / macos-latest-5.3-OFF', id=122240818591,
+               run_id=39284346365, run_attempt=1, status='in_progress',
+               conclusion=None, completed_at=None, steps=[
+                   dict(job('Lua build'), number=14),
+                   dict(job('Complete job'), number=31)])
+
+
 class Timings(unittest.TestCase):
+    def test_stuck_full_job_uses_terminal_step_time_without_inventing_conclusion(self):
+        stuck = stuck_job()
+        report, api, sleep = self.measure(
+            [{'jobs': [stuck, job('checks / Lua quality gate')]}] * ci_timings.METADATA_ATTEMPTS)
+        self.assertEqual(report['job_count'], 2)
+        self.assertEqual(report['job_seconds'], 120)
+        timing = report['jobs'][0]
+        self.assertEqual(timing['timing_source'], 'completed_steps')
+        self.assertEqual(timing['api_status'], 'in_progress')
+        self.assertIsNone(timing['api_completed_at'])
+        self.assertIsNone(timing['conclusion'])
+        self.assertEqual(api.call_count, 1)
+        sleep.assert_not_called()
+
+    def test_step_timing_requires_complete_terminal_evidence(self):
+        original = stuck_job()
+        mutations = [
+            ('missing terminal', [original['steps'][0]]),
+            ('duplicate terminal', original['steps'] + [original['steps'][-1]]),
+            ('unfinished step', [dict(original['steps'][0], status='in_progress'), original['steps'][1]]),
+            ('missing conclusion', [dict(original['steps'][0], conclusion=None), original['steps'][1]]),
+            ('missing timestamp', [dict(original['steps'][0], completed_at=None), original['steps'][1]]),
+            ('invalid timestamp', [original['steps'][0], dict(original['steps'][1], completed_at='bad')]),
+            ('reversed time', [original['steps'][0], dict(original['steps'][1], completed_at='2026-10-19T16:17:00Z')]),
+            ('later step', original['steps'] + [dict(job('Post cleanup'), number=32)]),
+            ('later timestamp', [dict(original['steps'][0], completed_at='2026-10-19T16:20:00Z'), original['steps'][1]]),
+        ]
+        for name, steps in mutations:
+            with self.subTest(name=name):
+                value = original | {'steps': steps}
+                self.assertIs(ci_timings.step_timing(value, '39284346365', '1'), value)
+
+    def test_step_timing_rejects_another_run_or_attempt(self):
+        for changes in ({'run_id': 123}, {'run_attempt': 2}, {'id': None}):
+            with self.subTest(changes=changes), self.assertRaisesRegex(ValueError, 'same run and attempt'):
+                ci_timings.step_timing(stuck_job() | changes, '39284346365', '1')
+
+    def test_step_timing_preserves_unknown_outcome_after_a_failed_step(self):
+        value = stuck_job()
+        value['steps'][0]['conclusion'] = 'failure'
+        before = deepcopy(value)
+        measured = ci_timings.step_timing(value, '39284346365', '1')
+        self.assertEqual(measured['timing_source'], 'completed_steps')
+        self.assertIsNone(measured['conclusion'])
+        self.assertEqual(value, before)
+
+    def test_completed_api_metadata_takes_precedence_over_steps(self):
+        value = stuck_job() | {'status': 'completed', 'conclusion': 'failure',
+                               'completed_at': '2026-10-19T16:19:05Z'}
+        self.assertIs(ci_timings.step_timing(value, '39284346365', '1'), value)
+        report, _, _ = self.measure([{'jobs': [value, job('checks / Lua quality gate')]}])
+        self.assertEqual(report['jobs'][0]['conclusion'], 'failure')
+        self.assertEqual(report['jobs'][0]['seconds'], 65)
+        self.assertNotIn('timing_source', report['jobs'][0])
+
     def test_run_scope_retries_incomplete_gate_metadata(self):
         report, api, sleep = self.measure([
             {'jobs': [job('smoke'), job('Lua quality gate', completed_at=None)]},

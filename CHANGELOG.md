@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Recover timing telemetry from the final `Complete job` step when GitHub leaves a job marked `in_progress` despite all steps being complete; verify the run/attempt and step timestamps, label the fallback source and preserve the API's unknown conclusion without changing quality or release gates. (#40)
 - Allow delayed GitHub Actions job timing metadata to arrive over 18 attempts at 10-second intervals, retaining exact-attempt collection and rejection of incomplete reports; include pending job details in retry and failure diagnostics. (#40)
 - Correct the `LICENSE` copyright holder from the OpenTLV organization, inherited from the GitHub template, to Marek Cingel, matching the source headers and the Core license; packages built from this revision carry the corrected `LICENSE-Lua`. (#23)
 - Distinguish migration-era Core-aligned documentation from current independently versioned Lua manuals, while preserving source provenance and historical validation. (#21)
