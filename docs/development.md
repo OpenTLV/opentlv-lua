@@ -226,3 +226,49 @@ The rock installs `opentlv/_core.so` (or `.dll`) in LuaRocks' native module
 directory and `opentlv/init.lua` in its Lua source directory. It also stores
 `lua-version.json` in the versioned rock directory. See
 [independent versioning](versioning.md) for its meaning and release baseline.
+
+## Contributing and licensing
+
+The shared
+[OpenTLV contribution guidelines](https://github.com/OpenTLV/.github/blob/main/CONTRIBUTING.md),
+[Code of Conduct](https://github.com/OpenTLV/.github/blob/main/CODE_OF_CONDUCT.md)
+and [support directory](https://github.com/OpenTLV/.github/blob/main/SUPPORT.md)
+apply; this guide adds the Lua build and test rules. Report suspected
+vulnerabilities privately through the repository's Security tab as described
+in the [security policy](https://github.com/OpenTLV/.github/blob/main/SECURITY.md),
+not in public issues. Changes to shared TLV semantics, the C API or Core
+components belong to [OpenTLV Core](https://github.com/OpenTLV/opentlv/issues).
+
+The binding is MIT licensed. Marek Cingel holds copyright in his original
+contributions; other contributors retain copyright in theirs, since an MIT
+contribution does not assign copyright, and OpenTLV is a GitHub organization,
+not a copyright holder. Start new Lua sources by Marek Cingel with:
+
+<!-- REUSE-IgnoreStart -->
+```lua
+-- SPDX-License-Identifier: MIT
+-- Copyright (c) 2026 Marek Cingel
+```
+<!-- REUSE-IgnoreEnd -->
+
+Use `//` comments in C files, `#` comments in Python, CMake and YAML files,
+and your own name and year for your own work; never rewrite an existing or
+third-party notice. Documentation and JSON data files that cannot carry a
+header are listed by exact path in the repository's `REUSE.toml`; add new ones
+there. The initial source inventory in `docs/migration/` and the historical
+README in `provenance/` keep their original bytes and never receive headers.
+`pre-commit run --all-files`, which the source quality job runs, includes
+`reuse lint` over every file Git does not ignore. The hook only lints: it does
+not add headers, which would put one author's notice on other contributors'
+files.
+
+The module archives carry `LICENSE-Lua` and `LICENSE-Core`, and the rock
+installs `LICENSE` into its documentation directory, because LuaRocks copies
+the root license and Markdown files when a rockspec names no documentation
+directory. The rockspec declares `license = "MIT"`. The native module
+statically links Core by default, so a binary distribution needs Core's MIT
+notice as well; at the pinned commit, Core's `LICENSE` is identical to this
+repository's and names the same holder. The archives bundle no Lua interpreter
+or library; the consumer provides it. Recheck Core's notices when changing
+the pin, and add the license of every new bundled or linked dependency to the
+archives and this section.
