@@ -72,6 +72,14 @@ class Licensing(unittest.TestCase):
         rockspec = (ROOT / 'opentlv-scm-1.rockspec').read_text(encoding='utf-8')
         self.assertRegex(rockspec, r'(?m)^\s*license = "MIT"$')
 
+    def test_rock_installs_core_license(self):
+        # The module links Core: the rock's doc directory carries both licenses.
+        rockspec = (ROOT / 'opentlv-scm-1.rockspec').read_text(encoding='utf-8')
+        self.assertIn('cmake -E copy_directory build/luarocks/rock-doc "$(PREFIX)/doc"', rockspec)
+        core = (ROOT / 'cmake/Core.cmake').read_text(encoding='utf-8')
+        self.assertIn('"${opentlv_core_SOURCE_DIR}/LICENSE"', core)
+        self.assertIn('rock-doc/LICENSE-Core', core)
+
     def test_organization_is_not_a_copyright_holder(self):
         notices = 0
         for path in tracked():

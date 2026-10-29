@@ -231,8 +231,10 @@ directory and `opentlv/init.lua` in its Lua source directory. It also stores
 [release rockspec](versioning.md#luarocks-release-rockspec) of a release tag
 in `build/rockspecs`. Its build passes `OPENTLV_LUA_RELEASE_TAG`, because
 LuaRocks builds a release from a tag clone without `.git`; `luarocks make`
-with it from a checkout succeeds only at that tag. Use `opentlv-scm-1.rockspec`
-for development builds.
+with it from a checkout succeeds only at that tag. A build with the release
+tag skips installed Core package discovery and fetches the pinned Core, unless
+`OPENTLV_LUA_CORE_PACKAGE` or a source override is set explicitly. Use
+`opentlv-scm-1.rockspec` for development builds.
 
 ## Contributing and licensing
 
@@ -269,10 +271,11 @@ README in `provenance/` keep their original bytes and never receive headers.
 not add headers, which would put one author's notice on other contributors'
 files.
 
-The module archives carry `LICENSE-Lua` and `LICENSE-Core`, and the rock
-installs `LICENSE` into its documentation directory, because LuaRocks copies
-the root license and Markdown files when a rockspec names no documentation
-directory. The rockspec declares `license = "MIT"`. The native module
+The module archives carry `LICENSE-Lua` and `LICENSE-Core`. The rock installs
+`LICENSE-Core` from the selected Core source or package into its documentation
+directory, where LuaRocks also copies `LICENSE` and the root Markdown files
+because the rockspec names no documentation directory. The rockspec declares
+`license = "MIT"`. The native module
 statically links Core by default, so a binary distribution needs Core's MIT
 notice as well; at the pinned commit, Core's `LICENSE` is identical to this
 repository's and names the same holder. The archives bundle no Lua interpreter

@@ -128,6 +128,16 @@ def execute(args, evidence):
         # Shared-library distribution is covered by the standalone build matrix.
         run([sys.executable, '-B', ROOT / 'scripts/check_luarocks.py', '--lua', lua, '--core-source', core])
         evidence['luarocks'] = True
+        if args.shared == 'OFF':
+            # The release rock always builds static Core, fetched as a consumer would.
+            evidence['stage'] = 'Release rock'
+            from check_release_rock import FIXTURE_TAG, check
+            tag = os.environ['RELEASE_TAG'] if args.release else FIXTURE_TAG
+            if args.release:
+                tagged = run(['git', '-C', ROOT, 'rev-parse', f'refs/tags/{tag}^{{commit}}'],
+                             stdout=subprocess.PIPE, text=True).stdout.strip()
+                require(tagged == evidence['lua_sha'], 'The candidate tag must select the tested commit')
+            evidence['release_rock'] = check(lua, core, evidence['lua_sha'], tag, build / 'lua-query-conformance.lua')
     if args.package:
         require(args.shared == 'OFF' and not args.sanitizer, 'Official module packages use static Core')
         from check_dependency import check

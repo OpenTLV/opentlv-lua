@@ -2,8 +2,11 @@
 # Copyright (c) 2026 Marek Cingel
 """Declared Lua verification configurations and fail-closed evidence checks."""
 
+import re
+
 from ci_support import ROOT, digest, identity, require, same_identity
 from lua_suite import EXPECTED_TESTS
+from lua_package import PACKAGE_TESTS
 from check_dependency import SCENARIOS
 
 SYSTEMS = ('ubuntu-24.04', 'windows-latest', 'macos-latest')
@@ -61,6 +64,16 @@ def validate_record(record, row, release=False, core_lock=None, core_release=Non
             min(record.get('query_fixtures', 0), record.get('query_checks', 0)) > 0,
             'Incomplete Lua suite evidence')
     require(not row['rocks'] or record.get('luarocks') is True, 'Missing LuaRocks verification')
+    if row['rocks'] and row['shared'] == 'OFF':
+        rock = record.get('release_rock') or {}
+        tag = rock.get('tag', '')
+        require(re.fullmatch(r'v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', tag) and
+                rock.get('commit') == record.get('lua_sha') and rock.get('core_commit') == record.get('core_sha') and
+                rock.get('rock') == f'opentlv-{tag[1:]}-1.src.rock' and
+                all(re.fullmatch('[0-9a-f]{64}', rock.get(k, '')) for k in ('sha256', 'rockspec_sha256')) and
+                rock.get('tests') == list(PACKAGE_TESTS) and rock.get('query') is True and
+                rock.get('metadata') == {'binding_version': tag[1:], 'binding_revision': '', 'release_tag': tag,
+                                         'dirty': False}, 'Missing release rock verification')
     require(not row['package'] or record.get('package', {}).get('id') == row['package'], 'Missing module package')
     require(not row['package'] or record.get('dependency_checks') == SCENARIOS, 'Incomplete dependency checks')
     if release:
@@ -78,6 +91,10 @@ def validate_inventory(records, tier, **kwargs):
     by_id = {r['id']: r for r in records}
     for row in rows:
         validate_record(by_id[row['id']], row, **kwargs)
+    # Every platform must have built and installed the same source rock bytes.
+    rocks = [r['release_rock'] for r in records if r.get('release_rock')]
+    require(not rocks or len({(r['tag'], r['sha256'], r['rockspec_sha256']) for r in rocks}) == 1,
+            'Release rocks differ between configurations')
 
 
 def gate(tier, results, records):
