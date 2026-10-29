@@ -17,11 +17,10 @@ selects the exact dispatch SHA, even if main advances during verification.
    skip-verification input is available. Existing tags, including another
    version tag on the candidate, are rejected.
 
-## Core v0.8.0 release candidate (#40)
+## Published Core v0.8.0 baseline (#40)
 
-The next planned Lua release is **v0.2.0**, independently versioned from Core.
-On 2026-10-27 the only existing Lua tag was v0.1.0; recheck tag availability
-immediately before dispatch. The minor increment covers the public streaming,
+Lua **v0.2.0** was [published on 2026-10-27](https://github.com/OpenTLV/opentlv-lua/releases/tag/v0.2.0),
+independently versioned from Core. The minor increment covers the public streaming,
 Format composition, Document, Query, Schema, codec and Generator APIs added
 since that baseline, together with the release and licensing work recorded in
 the changelog.
@@ -33,22 +32,10 @@ the resolver must authenticate them at execution time under the
 [Core verification policy](quality-gates.md#core-verification).
 Original migration records continue to identify the initial imported sources.
 
-The candidate changelog is closed as `## [v0.2.0] - 2026-10-27`.
-Before publication:
-
-1. Confirm the changelog date matches the actual release date, merge the
-   candidate and record its exact Lua SHA.
-2. Verify Main and Full on that SHA, including Core API completeness. Earlier
-   runs against the migration pin do not establish Core v0.8.0 compatibility.
-3. Dispatch `release.yml` on `main` with `tag=v0.2.0`. Its own Full run and
-   same-attempt evidence still govern publication.
-4. Verify the published tag resolves to the candidate, the release notes, both
-   `OpenTLV-Lua-0.2.0-{linux,windows}-x64-lua54.zip` archives,
-   `release-manifest.json`, `SHA256SUMS` and producer attestations. Inspect the
-   release receipt and Docs notification separately.
-5. Link the published release and gate evidence in
-   [Lua #40](https://github.com/OpenTLV/opentlv-lua/issues/40) and
-   [Core epic #718](https://github.com/OpenTLV/opentlv/issues/718).
+The released changelog is `## [v0.2.0] - 2026-10-27`. Its GitHub Release
+contains Linux/Windows Lua 5.4 module archives, `release-manifest.json` and
+`SHA256SUMS`, but no release rockspec or source rock. Do not redispatch this
+existing tag for LuaRocks; it predates the required packaging changes.
 
 Local preparation on 2026-10-27 verified the Core manifest, checksums and source
 archive against their downloaded attestation bundles, requiring the Core
@@ -59,6 +46,35 @@ tests, API completeness and pre-commit checks also passed.
 
 A prepared pin update or a passing local suite is not a published release.
 LuaRocks upload is outside this candidate's publication requirements.
+
+## First LuaRocks release (#46)
+
+The next Lua release candidate is **v0.3.0**, with rock version **0.3.0-1**.
+The candidate changelog is closed as `## [v0.3.0] - 2026-10-29`. Core
+remains v0.8.0 at the pin above. Neither a prepared candidate nor these
+instructions authorize GitHub or LuaRocks publication.
+
+On 2026-10-29, `main` at `2fece68b7b2286656b6f080694f931d3e1730cd6`
+contained the merged packaging and publication changes (#43–#45).
+[Main CI passed](https://github.com/OpenTLV/opentlv-lua/actions/runs/40856570297)
+on that commit. The latest
+[Full CI success](https://github.com/OpenTLV/opentlv-lua/actions/runs/40855547302)
+was on the earlier `f59ee3fc05eecea03f69e2200fee0eee05a43dc8` commit;
+it does not replace the release gate's Full run on the final candidate.
+Only v0.1.0 and v0.2.0 existed, and none of the Lua 5.1–5.4 root manifests
+listed `opentlv`. These are dated observations, not a namespace reservation.
+
+Before dispatch, confirm the [environment and secret setup](#one-time-setup)
+in the live repository settings, recheck tag and namespace availability,
+confirm the changelog date matches the actual release date, and merge the
+reviewed candidate to `main`. Record its final SHA. The GitHub
+release gate publishes a tag and release, so obtain explicit approval before
+dispatching it. LuaRocks then requires its separate environment approval.
+
+Keep [#46](https://github.com/OpenTLV/opentlv-lua/issues/46) open until the
+[external consumer verification](#external-consumer-verification) passes
+against the public release and its evidence is recorded. Passing preparation
+checks alone does not meet that issue's acceptance criteria.
 
 ## Verification and publication
 
@@ -155,6 +171,97 @@ the API method and HTTP status. The upload never uses `--force`:
 A version on LuaRocks cannot be corrected in place: to republish the same tag,
 release a new packaging revision (`-2`) instead. Clean consumer installation from
 LuaRocks is verified separately.
+
+### External consumer verification
+
+Run this after publication on a clean Linux machine with Lua 5.4 and its
+development headers, LuaRocks configured for that interpreter, CMake 3.24+,
+a C99 compiler, Git, Python 3, curl, unzip and GitHub CLI. This independent
+consumer check supplements the supported-platform Full matrix; it does not
+claim a new Windows/macOS test. Use a fresh shell without Lua search-path,
+Lua initialization, CMake or Core overrides and without the upload key.
+The commands below use the v0.3.0 candidate; substitute the approved version
+consistently if it changes before publication.
+
+1. Download and authenticate the actual release outside any source checkout:
+
+   ```sh
+   set -eu
+   tag=v0.3.0
+   rock_version=0.3.0-1
+   work=$(mktemp -d)
+   cd "$work"
+   mkdir release registry
+   gh release download "$tag" --repo OpenTLV/opentlv-lua --dir release
+   lua_sha=$(gh api "repos/OpenTLV/opentlv-lua/commits/$tag" --jq .sha)
+   (cd release && sha256sum --check SHA256SUMS)
+   for asset in release/*; do
+       gh attestation verify "$asset" --repo OpenTLV/opentlv-lua \
+           --signer-workflow OpenTLV/opentlv-lua/.github/workflows/release.yml \
+           --source-digest "$lua_sha"
+   done
+   ```
+
+   Check that `release-manifest.json` and the publication receipt identify
+   this same tag, Lua SHA, Core pin, GitHub release ID and successful release
+   run/attempt. Retain the approved publisher's plan and receipt artifacts.
+
+2. Compare the public registry bytes with the authenticated release assets:
+
+   ```sh
+   for suffix in rockspec src.rock; do
+       name="opentlv-$rock_version.$suffix"
+       curl --fail --location "https://luarocks.org/manifests/marekcingel/$name" \
+           --output "registry/$name"
+       cmp "release/$name" "registry/$name"
+   done
+   luarocks --tree="$work/tree" --only-server=https://luarocks.org \
+       install opentlv "$rock_version"
+   ```
+
+   Save the install log showing public server resolution and a successful
+   native build. Do not install from the local files or add a Core override.
+   Compare the installed rockspec with `registry/opentlv-<version>-1.rockspec`.
+   Confirm `doc/LICENSE` and `doc/LICENSE-Core` match the Lua release and pinned
+   Core licenses, and `lua-version.json` has the approved binding version and
+   tag, an empty `binding_revision`, and `dirty: false`.
+
+3. Load only the new tree and run the API, Query and quick-start scripts from
+   the authenticated source rock:
+
+   ```sh
+   unzip -q "registry/opentlv-$rock_version.src.rock" -d source
+   export LUA_PATH="$work/tree/share/lua/5.4/?/init.lua"
+   export LUA_CPATH="$work/tree/lib/lua/5.4/?.so"
+   export OPENTLV_EXPECTED_VERSION="${tag#v}"
+   lua -e 'local m = require("opentlv"); assert(m == require("opentlv._core"));
+       assert(m.version() == os.getenv("OPENTLV_EXPECTED_VERSION"));
+       assert(m._VERSION == m.version())'
+   metadata="$work/tree/lib/luarocks/rocks-5.4/opentlv/$rock_version/lua-version.json"
+   lua source/opentlv-lua/tests/version.lua "$metadata"
+   for test in smoke codec_spec query_document_spec schema_spec writer_spec \
+       stream_spec visitor_spec program_spec document_query_schema_spec \
+       codec_generator_spec definition_path_spec; do
+       lua "source/opentlv-lua/tests/$test.lua"
+   done
+   lua source/opentlv-lua/examples/quick_start.lua
+   ```
+
+   There are no default-path suffixes in these search paths, and the working
+   directory is outside the unpacked sources. `require` must load the installed
+   facade and native module. Keep the temporary directory and logs as evidence.
+
+4. Check the public module/version page, its README and installation command,
+   and the Docs portal's Lua version and examples. After publication succeeds,
+   replace the README's pending-publication statement with the verified version,
+   module URL and registry installation command. Track Docs notification and
+   actual portal publication separately.
+
+Record the registry URL, release/tag/SHA, both file digests, release and
+publication run URLs/attempts, environment approval evidence, consumer OS/Lua/
+LuaRocks/compiler versions, install and test logs, and documentation URLs in
+#46. Record failures and pending checks explicitly; do not mark the issue or
+epic complete until the actual public installation and documentation pass.
 
 ## Automatic release documentation
 
