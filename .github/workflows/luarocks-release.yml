@@ -1,0 +1,66 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Marek Cingel
+name: Lua LuaRocks Publication
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published Lua release tag, e.g. v0.3.0
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: lua-luarocks
+  cancel-in-progress: false
+jobs:
+  verify:
+    name: Verify Lua release rock
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      attestations: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # The release commit must be present to rebuild its source rock.
+          fetch-depth: 0
+          persist-credentials: false
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: python -B scripts/luarocks_release.py verify
+      - uses: actions/upload-artifact@v4
+        with:
+          name: luarocks-plan-${{ github.run_attempt }}
+          path: build/luarocks/plan.json
+          if-no-files-found: error
+  publish:
+    name: Publish Lua rock to LuaRocks
+    needs: verify
+    runs-on: ubuntu-24.04
+    # Required reviewers on this environment approve each upload; it alone holds the API key.
+    environment: luarocks
+    permissions:
+      contents: read
+      actions: read
+      attestations: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # Verification repeats after approval; only the attested release bytes are uploaded.
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          LUAROCKS_API_KEY: ${{ secrets.LUAROCKS_API_KEY }}
+        run: python -B scripts/luarocks_release.py publish
+      - uses: actions/upload-artifact@v4
+        with:
+          name: luarocks-receipt-${{ github.run_attempt }}
+          path: |
+            build/luarocks/plan.json
+            build/luarocks/receipt.json
+          if-no-files-found: error
