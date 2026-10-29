@@ -34,13 +34,16 @@ class VersionTests(unittest.TestCase):
         return subprocess.check_output(["git", "-C", str(self.source), *args],
                                        text=True, stderr=subprocess.STDOUT).strip()
 
-    def metadata(self, source=None, success=True):
-        result = subprocess.run(["cmake", "-DLUA_SOURCE=" + str(source or self.source),
-                                 "-DLUA_BINARY=" + str(self.root / "output"), "-P", str(SCRIPT)],
-                                capture_output=True, text=True)
+    def metadata(self, source=None, success=True, release=None, error="Multiple Lua release tags"):
+        command = ["cmake", "-DLUA_SOURCE=" + str(source or self.source),
+                   "-DLUA_BINARY=" + str(self.root / "output")]
+        if release is not None:
+            command.append("-DOPENTLV_LUA_RELEASE_TAG=" + release)
+        result = subprocess.run(command + ["-P", str(SCRIPT)], capture_output=True, text=True)
         if not success:
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn("Multiple Lua release tags", result.stderr)
+            # CMake wraps long messages.
+            self.assertIn(error, " ".join(result.stderr.split()))
             return
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         metadata = json.loads((self.root / "output/lua-version.json").read_text(encoding="utf-8"))
@@ -128,6 +131,41 @@ class VersionTests(unittest.TestCase):
         archive = self.root / "archive"
         archive.mkdir()
         self.assertEqual(self.metadata(archive)["binding_version"], "scm+unknown")
+        self.assertEqual(self.metadata(archive, release="")["binding_version"], "scm+unknown")
+
+    def test_versioned_rockspec_declares_release_without_git(self):
+        # LuaRocks deletes .git from the tag a versioned rockspec clones.
+        archive = self.root / "archive"
+        archive.mkdir()
+        self.assertEqual(self.metadata(archive, release="v0.3.0"), {
+            "binding_version": "0.3.0", "binding_revision": "",
+            "release_tag": "v0.3.0", "dirty": False})
+        nested = self.source / "nested"
+        nested.mkdir()
+        self.git("tag", "v9.8.7")
+        self.assertEqual(self.metadata(nested, release="v0.3.0")["release_tag"], "v0.3.0")
+
+    def test_declared_release_must_match_git_checkout(self):
+        self.metadata(release="v0.3.0", success=False,
+                      error="builds Lua release v0.3.0, but the Lua checkout reports scm+g" + self.sha[:12])
+        self.git("tag", "v0.2.0")
+        self.metadata(release="v0.3.0", success=False, error="but the Lua checkout reports 0.2.0")
+        self.git("tag", "-d", "v0.2.0")
+        self.git("tag", "v0.3.0")
+        self.assertEqual(self.metadata(release="v0.3.0"), {
+            "binding_version": "0.3.0", "binding_revision": self.sha,
+            "release_tag": "v0.3.0", "dirty": False})
+        (self.source / "tracked").write_text("modified\n", encoding="utf-8")
+        self.assertEqual(self.metadata(release="v0.3.0")["binding_version"],
+                         "0.3.0+g" + self.sha[:12] + ".dirty")
+
+    def test_invalid_declared_release_rejected(self):
+        archive = self.root / "archive"
+        archive.mkdir()
+        for release in ("0.3.0", "v03.0.0", "v0.3", "v0.3.0-rc.1", "ON"):
+            with self.subTest(release=release):
+                self.metadata(archive, release=release, success=False,
+                              error="must be a vMAJOR.MINOR.PATCH Lua release tag")
 
 
 if __name__ == "__main__":

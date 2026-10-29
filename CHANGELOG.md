@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Prepare the `opentlv` LuaRocks rock: `scripts/rockspec.py vMAJOR.MINOR.PATCH` generates `opentlv-MAJOR.MINOR.PATCH-N.rockspec` from the `opentlv-scm-1.rockspec` of that release tag, changing only the version, the source tag and the declared release tag, so the single rock keeps the native `opentlv._core` module and pure-Lua facade with their build and install commands. LuaRocks deletes `.git` from the tag it clones, so a release rock reported `scm+unknown`; the rockspec now passes `OPENTLV_LUA_RELEASE_TAG`, which identifies a source tree without Git and must match the tag of a Git checkout, and the development rockspec passes it empty. Tags `v0.1.0` and `v0.2.0` lack it and are rejected. The versioning guide records the verified LuaRocks name and account and the release rockspec procedure; upload remains separate and requires approval. (#43)
+
 ## [v0.2.0] - 2026-10-27
 
 ### Changed

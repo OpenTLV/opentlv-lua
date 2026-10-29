@@ -8,6 +8,13 @@ set(_version "scm+unknown")
 set(_revision "")
 set(_tag "")
 set(_dirty "false")
+set(_release_pattern "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$")
+# A versioned rockspec declares its release tag because LuaRocks deletes .git
+# from the tag it clones. It identifies only a source tree without Git; a Git
+# checkout keeps reporting its own state and must be at that same tag.
+if(NOT "${OPENTLV_LUA_RELEASE_TAG}" STREQUAL "" AND NOT OPENTLV_LUA_RELEASE_TAG MATCHES "${_release_pattern}")
+    message(FATAL_ERROR "OPENTLV_LUA_RELEASE_TAG must be a vMAJOR.MINOR.PATCH Lua release tag")
+endif()
 execute_process(COMMAND git rev-parse --show-toplevel
     WORKING_DIRECTORY "${LUA_SOURCE}" OUTPUT_VARIABLE _root
     OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
@@ -32,7 +39,7 @@ if(_root STREQUAL _source)
     string(REPLACE "\n" ";" _tags "${_tags}")
     foreach(_candidate IN LISTS _tags)
         # Release tags include v; the binding version below is plain SemVer.
-        if(_candidate MATCHES "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$")
+        if(_candidate MATCHES "${_release_pattern}")
             if(_tag)
                 message(FATAL_ERROR "Multiple Lua release tags point at HEAD")
             endif()
@@ -52,6 +59,14 @@ if(_root STREQUAL _source)
         endif()
         string(APPEND _version ".dirty")
     endif()
+    if(NOT "${OPENTLV_LUA_RELEASE_TAG}" STREQUAL "" AND NOT _tag STREQUAL OPENTLV_LUA_RELEASE_TAG)
+        message(FATAL_ERROR "The rockspec builds Lua release ${OPENTLV_LUA_RELEASE_TAG}, "
+            "but the Lua checkout reports ${_version}")
+    endif()
+elseif(NOT "${OPENTLV_LUA_RELEASE_TAG}" STREQUAL "")
+    # Declared, not verified: no revision or worktree status is available.
+    set(_tag "${OPENTLV_LUA_RELEASE_TAG}")
+    string(SUBSTRING "${_tag}" 1 -1 _version)
 endif()
 configure_file("${CMAKE_CURRENT_LIST_DIR}/lua-version.json.in" "${LUA_BINARY}/lua-version.json" @ONLY)
 configure_file("${CMAKE_CURRENT_LIST_DIR}/lua-version.h.in" "${LUA_BINARY}/generated/lua-version.h" @ONLY)

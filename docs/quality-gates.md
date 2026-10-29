@@ -131,8 +131,9 @@ distributed. Shared Core configurations are tested separately.
 
 The GitHub Release contains both archives, `release-manifest.json` and
 `SHA256SUMS`. Every file is attested. Publication verifies attestations again
-before creating the tag. LuaRocks publication and a versioned release rockspec
-remain separate work; the development rockspec stays `scm-1`.
+before creating the tag. LuaRocks publication remains separate work; the
+development rockspec stays `scm-1`, and the gate neither generates nor uploads a
+[release rockspec](versioning.md#luarocks-release-rockspec).
 
 ## Core API coverage
 
