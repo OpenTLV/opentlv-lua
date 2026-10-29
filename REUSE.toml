@@ -21,9 +21,16 @@ path = [
     "docs/implementation.md",
     "docs/migration.md",
     "docs/quality-gates.md",
+    "docs/release-notes.json",
+    "docs/release-notes.md",
+    "docs/release-notes-v0.2.0-example.md",
+    "docs/release-preview.md",
     "docs/releases.md",
     "docs/testing.md",
     "docs/versioning.md",
+    "tests/fixtures/release-notes-v0.2.0/CHANGELOG.md",
+    "tests/fixtures/release-notes-v0.2.0/editorial.json",
+    "tests/fixtures/release-notes-v0.2.0/manifest.json",
 ]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Marek Cingel"

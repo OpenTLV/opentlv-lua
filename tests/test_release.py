@@ -155,9 +155,10 @@ class Release(unittest.TestCase):
                 (root / record['package']['filename']).write_bytes(b'tampered')
             (root / 'opentlv-0.2.0-1.rockspec').write_bytes(b'rockspec')
             (root / 'opentlv-0.2.0-1.src.rock').write_bytes(b'rock')
+            (root / 'release-notes.md').write_bytes(b'notes')
             rock = {'rock': 'opentlv-0.2.0-1.src.rock', 'sha256': digest(root / 'opentlv-0.2.0-1.src.rock'),
                     'rockspec_sha256': digest(root / 'opentlv-0.2.0-1.rockspec')}
-            names = ['release-manifest.json', 'opentlv-0.2.0-1.rockspec', 'opentlv-0.2.0-1.src.rock'] + \
+            names = ['release-manifest.json', 'release-notes.md', 'opentlv-0.2.0-1.rockspec', 'opentlv-0.2.0-1.src.rock'] + \
                 [r['package']['filename'] for r in packages]
             (root / 'SHA256SUMS').write_text(''.join(f'{digest(root / n)}  {n}\n' for n in names))
             with patch.object(release, 'preflight', return_value=request), patch.object(release, 'check_quality'), \
@@ -174,6 +175,7 @@ class Release(unittest.TestCase):
             root = Path(tmp)
             request = dict(identity(), tag='v0.2.0', version='0.2.0', core_lock=LOCK,
                            core_release=CORE_RELEASE, lua_sha=ENV['GITHUB_SHA'], workflow_sha=ENV['GITHUB_SHA'])
+            request['core_lock'] = dict(LOCK, repository='OpenTLV/opentlv')
             evidence = records()
             rockspec, rock = b'controlled rockspec fixture', b'controlled source rock fixture'
 
@@ -190,7 +192,7 @@ class Release(unittest.TestCase):
                 if not record['package']:
                     continue
                 package = record['package']
-                archive = root / (package['id'] + '.zip')
+                archive = root / ('OpenTLV-Lua-0.2.0-' + package['id'] + '.zip')
                 archive.write_bytes(b'controlled package fixture')
                 record['compiler'] = {'SIZEOF_DATA_PTR': '8'}
                 package.update(filename=archive.name, sha256=digest(archive), tests=list(PACKAGE_TESTS),
@@ -201,11 +203,26 @@ class Release(unittest.TestCase):
             with patch.object(release, 'preflight', return_value=request), \
                     patch.object(release, 'configuration', return_value={'known': 'hash'}), \
                     patch.object(release, 'source_rock', rebuild), \
+                    patch.object(release.release_notes, 'reviewed', return_value=(
+                        '# Changes\n\n## [0.2.0] - 2026-10-27\n\n### Added\n\n- Release fixture.\n',
+                        {'schema': 1, 'version': '0.2.0', 'overview': 'Fixture overview.'})), \
                     patch.object(release, 'run') as command:
                 release.assemble(request, quality, root, root / 'release')
                 self.assertIn('opentlv-0.2.0-1.src.rock', (root / 'release/SHA256SUMS').read_text())
                 self.assertEqual(release.verify_payload(root / 'release'), request)
-                self.assertEqual(command.call_count, 6)
+                self.assertEqual(command.call_count, 7)
+                self.assertIn('release-notes.md', (root / 'release/SHA256SUMS').read_text())
+                notes_path = root / 'release/release-notes.md'
+                original_notes = notes_path.read_bytes()
+                sums_path = root / 'release/SHA256SUMS'
+                original_sums = sums_path.read_bytes()
+                notes_path.write_bytes(b'Replaced release description\n')
+                sums_path.write_bytes(original_sums.decode().replace(
+                    hashlib.sha256(original_notes).hexdigest(), digest(notes_path)).encode())
+                with self.assertRaisesRegex(ValueError, 'description differs'):
+                    release.verify_payload(root / 'release')
+                notes_path.write_bytes(original_notes)
+                sums_path.write_bytes(original_sums)
                 replaced = root / 'release/opentlv-0.2.0-1.src.rock'
                 replaced.write_bytes(b'replaced')
                 with self.assertRaisesRegex(ValueError, 'Modified release asset'):
@@ -227,6 +244,8 @@ class Release(unittest.TestCase):
                     arguments = command.call_args.args
                     self.assertEqual(arguments[3], 'v0.2.0')
                     self.assertEqual(arguments[arguments.index('--title') + 1], 'OpenTLV Lua 0.2.0')
+                    self.assertEqual(arguments[arguments.index('--notes-file') + 1], root / 'release/release-notes.md')
+                    self.assertNotIn('--generate-notes', arguments)
 
     def test_incomplete_same_attempt_jobs_never_publish(self):
         request = {'run_attempt': '1', 'commit': 'a' * 40}

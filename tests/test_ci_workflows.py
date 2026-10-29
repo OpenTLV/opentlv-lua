@@ -46,6 +46,17 @@ class Workflows(unittest.TestCase):
                         self.assertIn('github.run_attempt', step['with']['name'])
                         self.assertEqual(step['with']['if-no-files-found'], 'error')
 
+    def test_release_notes_are_visible_before_publication(self):
+        jobs = workflow('release.yml')['jobs']
+        uploads = [s['with']['path'] for s in jobs['prepare']['steps']
+                   if s.get('uses', '').startswith('actions/upload-artifact@')]
+        self.assertIn('docs/release-preview.md', uploads)
+        steps = jobs['assemble']['steps']
+        summary = next(i for i, s in enumerate(steps) if s.get('name') == 'Show prepared release description')
+        attest = next(i for i, s in enumerate(steps) if s.get('uses', '').startswith('actions/attest-build-provenance@'))
+        self.assertLess(summary, attest)
+        self.assertIn('release-notes.md', steps[summary]['run'])
+
     def test_luarocks_upload_needs_approval_and_holds_the_only_credential(self):
         doc = workflow('luarocks-release.yml')
         self.assertEqual(set(doc['on']), {'workflow_dispatch'})
