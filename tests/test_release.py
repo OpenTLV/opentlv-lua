@@ -3,6 +3,7 @@
 """Release entry points reject invalid requests and never mutate on failed gates."""
 
 from copy import deepcopy
+import hashlib
 import os
 from pathlib import Path
 import sys
@@ -123,9 +124,15 @@ class Release(unittest.TestCase):
             write(root / 'release-manifest.json', {'schema': 1, 'request': request, 'quality': {'records': packages}})
             for record in packages:
                 (root / record['package']['filename']).write_bytes(b'tampered')
-            names = ['release-manifest.json'] + [r['package']['filename'] for r in packages]
+            (root / 'opentlv-0.2.0-1.rockspec').write_bytes(b'rockspec')
+            (root / 'opentlv-0.2.0-1.src.rock').write_bytes(b'rock')
+            rock = {'rock': 'opentlv-0.2.0-1.src.rock', 'sha256': digest(root / 'opentlv-0.2.0-1.src.rock'),
+                    'rockspec_sha256': digest(root / 'opentlv-0.2.0-1.rockspec')}
+            names = ['release-manifest.json', 'opentlv-0.2.0-1.rockspec', 'opentlv-0.2.0-1.src.rock'] + \
+                [r['package']['filename'] for r in packages]
             (root / 'SHA256SUMS').write_text(''.join(f'{digest(root / n)}  {n}\n' for n in names))
             with patch.object(release, 'preflight', return_value=request), patch.object(release, 'check_quality'), \
+                    patch.object(release, 'release_rock', return_value=rock), \
                     patch.object(release, 'check_package'), patch.object(release, 'run') as command:
                 with self.assertRaisesRegex(ValueError, 'digest changed'):
                     release.verify_payload(root)
@@ -139,7 +146,18 @@ class Release(unittest.TestCase):
             request = dict(identity(), tag='v0.2.0', version='0.2.0', core_lock=LOCK,
                            core_release=CORE_RELEASE, lua_sha=ENV['GITHUB_SHA'], workflow_sha=ENV['GITHUB_SHA'])
             evidence = records()
+            rockspec, rock = b'controlled rockspec fixture', b'controlled source rock fixture'
+
+            def rebuild(directory, commit, tag):
+                self.assertEqual((commit, tag), (request['commit'], 'v0.2.0'))
+                paths = directory / 'opentlv-0.2.0-1.rockspec', directory / 'opentlv-0.2.0-1.src.rock'
+                for path, data in zip(paths, (rockspec, rock)):
+                    path.write_bytes(data)
+                return paths
             for record in evidence:
+                if record['release_rock']:
+                    record['release_rock'].update(sha256=hashlib.sha256(rock).hexdigest(),
+                                                  rockspec_sha256=hashlib.sha256(rockspec).hexdigest())
                 if not record['package']:
                     continue
                 package = record['package']
@@ -153,10 +171,17 @@ class Release(unittest.TestCase):
                            checks={key: {'result': 'success'} for key in ('build', 'quality', 'codeql', 'api_coverage')})
             with patch.object(release, 'preflight', return_value=request), \
                     patch.object(release, 'configuration', return_value={'known': 'hash'}), \
+                    patch.object(release, 'source_rock', rebuild), \
                     patch.object(release, 'run') as command:
                 release.assemble(request, quality, root, root / 'release')
+                self.assertIn('opentlv-0.2.0-1.src.rock', (root / 'release/SHA256SUMS').read_text())
                 self.assertEqual(release.verify_payload(root / 'release'), request)
-                self.assertEqual(command.call_count, 4)
+                self.assertEqual(command.call_count, 6)
+                replaced = root / 'release/opentlv-0.2.0-1.src.rock'
+                replaced.write_bytes(b'replaced')
+                with self.assertRaisesRegex(ValueError, 'Modified release asset'):
+                    release.verify_payload(root / 'release')
+                replaced.write_bytes(rock)
                 jobs = [{'name': name, 'conclusion': 'success', 'run_attempt': 1, 'head_sha': request['commit']}
                         for name in ('Full / checks / Lua quality gate', 'Assemble and attest Lua release')]
                 with patch.dict(os.environ, {'FULL_CI_RESULT': 'success', 'ASSEMBLE_RESULT': 'success'}), \

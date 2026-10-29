@@ -113,9 +113,10 @@ exact build version is in the API and JSON metadata.
 
 Tags `v0.1.0` and `v0.2.0` predate the declaration: a LuaRocks build from
 either reports `scm+unknown`, so the generator rejects them, and the first rock
-must come from a later release tag. The release gate publishes validated module
-archives and a GitHub Release. It does not generate a release rockspec or
-upload to LuaRocks; upload requires separate approval.
+must come from a later release tag. The release gate attaches the tested release
+rockspec and source rock to the GitHub Release with the module archives. It does
+not upload to LuaRocks: [LuaRocks publication](releases.md#luarocks-publication)
+is a separate, approved workflow that uploads exactly those attested files.
 
 ### Release rock contents and Core
 

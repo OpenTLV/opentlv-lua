@@ -134,11 +134,13 @@ consistency, plus the complete Query facade corpus.
 Native allocator injection remains in the build suite; the helper is not
 distributed. Shared Core configurations are tested separately.
 
-The GitHub Release contains both archives, `release-manifest.json` and
-`SHA256SUMS`. Every file is attested. Publication verifies attestations again
-before creating the tag. LuaRocks publication remains separate work; the
-development rockspec stays `scm-1`, and the gate neither generates nor uploads a
-[release rockspec](versioning.md#luarocks-release-rockspec).
+The GitHub Release contains both archives, the
+[release rockspec](versioning.md#luarocks-release-rockspec) and source rock that
+the Full configurations installed, `release-manifest.json` and `SHA256SUMS`.
+Every file is attested. Publication verifies attestations again before creating
+the tag. The development rockspec stays `scm-1`. The release gate holds no
+LuaRocks credential; [LuaRocks publication](releases.md#luarocks-publication)
+is a separate workflow behind environment approval.
 
 ## Core API coverage
 

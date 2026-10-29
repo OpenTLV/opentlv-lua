@@ -46,6 +46,29 @@ class Workflows(unittest.TestCase):
                         self.assertIn('github.run_attempt', step['with']['name'])
                         self.assertEqual(step['with']['if-no-files-found'], 'error')
 
+    def test_luarocks_upload_needs_approval_and_holds_the_only_credential(self):
+        doc = workflow('luarocks-release.yml')
+        self.assertEqual(set(doc['on']), {'workflow_dispatch'})
+        self.assertEqual(set(doc['on']['workflow_dispatch']['inputs']), {'tag'})
+        self.assertEqual(doc['permissions'], {'contents': 'read'})
+        self.assertEqual(doc['concurrency']['cancel-in-progress'], 'false')
+        verify, publish = doc['jobs']['verify'], doc['jobs']['publish']
+        self.assertEqual(set(doc['jobs']), {'verify', 'publish'})
+        self.assertNotIn('environment', verify)
+        self.assertEqual(publish['environment'], 'luarocks')
+        self.assertEqual(publish['needs'], 'verify')
+        for job in (verify, publish):
+            self.assertEqual(job['permissions'], {'contents': 'read', 'actions': 'read', 'attestations': 'read'})
+            for step in job['steps']:
+                if step.get('uses', '').startswith('actions/checkout@'):
+                    self.assertEqual(step['with']['persist-credentials'], 'false')
+        self.assertNotIn('secrets.', str(verify))
+        self.assertEqual([s['env']['LUAROCKS_API_KEY'] for s in publish['steps'] if 'LUAROCKS_API_KEY' in s.get('env', {})],
+                         ['${{ secrets.LUAROCKS_API_KEY }}'])
+        for path in (ROOT / '.github/workflows').glob('*.yml'):
+            if path.name != 'luarocks-release.yml':
+                self.assertNotIn('LUAROCKS_API_KEY', path.read_text(), path.name)
+
 
 if __name__ == '__main__':
     unittest.main()

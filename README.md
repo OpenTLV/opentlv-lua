@@ -63,9 +63,10 @@ isolated tree, Windows requirements, and explicit Core selection.
 The rock installs both modules and Lua binding version metadata. Lua release
 tags are independent of Core; `opentlv.version()` and `opentlv._VERSION`
 report the Lua binding version from that same metadata. See [versioning](docs/versioning.md).
-The rock is not yet published to LuaRocks; `scripts/rockspec.py` prepares the
-versioned [release rockspec](docs/versioning.md#luarocks-release-rockspec) of a
-release tag.
+The rock is not yet published to LuaRocks. Releases attach the tested
+[release rockspec](docs/versioning.md#luarocks-release-rockspec) and source rock,
+and a separately approved [publication workflow](docs/releases.md#luarocks-publication)
+uploads them.
 
 The [quality gates](docs/quality-gates.md) separate PR, Main, Full and Release
 verification. Full covers Lua 5.1–5.4 on Linux/Windows/macOS, Linux LuaJIT,
@@ -106,6 +107,7 @@ for credentials, retries and the separate versioned release publication flow.
 | `CMakeLists.txt` | Standalone binding build and existing test registration |
 | `opentlv-scm-1.rockspec` | Standalone LuaRocks build and installation metadata |
 | `.github/workflows/release.yml` | Manual release verification and artifact publication |
+| `.github/workflows/luarocks-release.yml` | Separately approved upload of a released rock to LuaRocks |
 | `docs/migration/` | Initial source inventory |
 | `provenance/` | Byte-preserved historical README |
 | `LICENSE`, `LICENSES/`, `REUSE.toml` | MIT license, the license text for REUSE and the metadata of files without a header |

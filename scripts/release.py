@@ -11,6 +11,7 @@ import re
 import shutil
 import tempfile
 
+from check_release_rock import source_rock
 from ci_support import ROOT, digest, identity, read, require, run, same_identity, write
 from lua_package import PACKAGE_TESTS
 from lua_policy import PACKAGES, configuration, gate, matrix, validate_inventory, check_results
@@ -77,6 +78,14 @@ def check_package(record, request):
     require(re.fullmatch('[0-9a-f]{64}', package.get('sha256', '')), 'Invalid module digest')
 
 
+def release_rock(quality, request):
+    """Return the one source rock that every static-Core configuration installed."""
+    rocks = [r['release_rock'] for r in quality['records'] if r.get('release_rock')]
+    require(rocks and all(r == rocks[0] for r in rocks) and rocks[0]['tag'] == request['tag'] and
+            rocks[0]['commit'] == request['commit'], 'Missing or inconsistent release rock evidence')
+    return rocks[0]
+
+
 def assemble(request, quality, evidence, output):
     require(request == preflight(request['tag']), 'Release request or Core release identity changed')
     check_quality(quality, request)
@@ -90,6 +99,11 @@ def assemble(request, quality, evidence, output):
         paths = list(evidence.rglob(item['filename']))
         require(len(paths) == 1 and digest(paths[0]) == item['sha256'], 'Missing, duplicate or modified package')
         shutil.copyfile(paths[0], output / item['filename'])
+    # Rebuild the tested source rock: only those exact bytes become release assets.
+    rock = release_rock(quality, request)
+    rockspec_path, rock_path = source_rock(output, request['commit'], request['tag'])
+    require(rock_path.name == rock['rock'] and digest(rock_path) == rock['sha256'] and
+            digest(rockspec_path) == rock['rockspec_sha256'], 'Release rock differs from the tested source rock')
     write(output / 'release-manifest.json', {'schema': 1, 'request': request, 'quality': quality})
     paths = sorted(output.iterdir())
     (output / 'SHA256SUMS').write_text(''.join(f'{digest(p)}  {p.name}\n' for p in paths), encoding='utf-8')
@@ -105,13 +119,17 @@ def verify_payload(directory):
     packages = [r for r in quality['records'] if r.get('package')]
     require(len(packages) == len(PACKAGES) and {r['package']['id'] for r in packages} == set(PACKAGES),
             'Incomplete module inventory')
-    expected = {'release-manifest.json', *(r['package']['filename'] for r in packages)}
+    rock = release_rock(quality, request)
+    rockspec = rock['rock'].removesuffix('.src.rock') + '.rockspec'
+    expected = {'release-manifest.json', rock['rock'], rockspec, *(r['package']['filename'] for r in packages)}
     sums = checksums(directory / 'SHA256SUMS')
     require(set(sums) == expected and {p.name for p in directory.iterdir()} == expected | {'SHA256SUMS'},
             'Unexpected release files')
     for record in packages:
         check_package(record, request)
         require(sums[record['package']['filename']] == record['package']['sha256'], 'Package digest changed')
+    require(sums[rock['rock']] == rock['sha256'] and sums[rockspec] == rock['rockspec_sha256'],
+            'Release rock digest changed')
     for name, checksum in sums.items():
         require(digest(directory / name) == checksum, 'Modified release asset')
     for path in sorted(directory.iterdir()):
