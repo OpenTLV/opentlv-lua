@@ -2,7 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
-## [v0.3.0] - 2026-10-29
+## [0.3.0] - 2026-10-29
+
+### Changed
+
+- Normalize release headings to `[X.Y.Z]`, preserving release dates and history. The release gate matches those headings to `vX.Y.Z` Git tags; regression tests also protect the existing `OpenTLV Lua X.Y.Z` GitHub Release titles. Git tags, LuaRocks versions and packaging behavior remain unchanged. (#51)
 
 ### Added
 
@@ -17,7 +21,7 @@ All notable changes to this project will be documented in this file.
 
 - Report only the method of a rejected LuaRocks API request, without the server's error text: a response that quotes the request could otherwise put the API key from its URL into CI logs. A regression test returns errors containing the key and checks that the exception omits it. (#45)
 
-## [v0.2.0] - 2026-10-27
+## [0.2.0] - 2026-10-27
 
 ### Changed
 
@@ -47,7 +51,7 @@ All notable changes to this project will be documented in this file.
 - Notify Docs after verified GitHub releases using exact release, commit and workflow-attempt evidence. (OpenTLV/opentlv-docs#42)
 - Align Lua PR, Main, Full and Release gates with runtime and sanitizer coverage, verified Core dependencies, validated module packages and CI timing evidence. (#13)
 
-## [v0.1.0] - 2026-10-19
+## [0.1.0] - 2026-10-19
 
 ### Fixed
 

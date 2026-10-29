@@ -23,12 +23,13 @@ SIGNER = REPOSITORY + '/.github/workflows/release.yml'
 
 
 def closed_changelog(text, tag):
+    require(re.fullmatch(TAG, tag), 'Tag must be vMAJOR.MINOR.PATCH')
     require('unreleased' not in text.lower(), 'Close the changelog before release')
     sections = re.split(r'^## ', text, flags=re.MULTILINE)
     require(len(sections) > 1, 'Missing release changelog')
     heading, _, body = sections[1].partition('\n')
-    match = re.fullmatch(r'\[' + re.escape(tag) + r'\] - (\d{4}-\d{2}-\d{2})', heading.strip())
-    require(match is not None, 'First changelog heading must match the release tag')
+    match = re.fullmatch(r'\[' + re.escape(tag[1:]) + r'\] - (\d{4}-\d{2}-\d{2})', heading.strip())
+    require(match is not None, 'First changelog heading must match the release version without v')
     date.fromisoformat(match[1])
     require(re.search(r'^- \S', body, re.MULTILINE), 'Empty release changelog')
 

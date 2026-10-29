@@ -10,12 +10,20 @@ selects the exact dispatch SHA, even if main advances during verification.
    workflow. Set its exact SHA in `cmake/Core.cmake` and the matching release/SHA
    in `cmake/core-artifact.json`. Verify the full Lua matrix after changing Core.
 2. Close the changelog and merge the candidate to `main`. The first release
-   heading must match the tag, for example `## [v0.2.0] - 2026-10-19`, followed
-   by at least one change. No `Unreleased` occurrence is allowed. Keep the usual
+   heading must match the tag's version without `v`: for tag `v0.3.0`, use
+   `## [0.3.0] - 2026-10-29`, followed by at least one change.
+   No `Unreleased` occurrence is allowed. Keep the usual
    Unreleased section during development and close it only for release.
 3. Dispatch the gate from `main` with that tag. No alternate SHA or
    skip-verification input is available. Existing tags, including another
    version tag on the candidate, are rejected.
+
+GitHub Release display titles use `OpenTLV Lua X.Y.Z`, for example
+`OpenTLV Lua 0.3.0`. The publisher takes this version from the validated
+release request; Git tags retain `vX.Y.Z` and LuaRocks retains `X.Y.Z-1`.
+Changes to an unreleased candidate must be reviewed and revalidated before
+dispatch. An approved or running release continues to use its locked commit
+and release scripts.
 
 ## Published Core v0.8.0 baseline (#40)
 
@@ -32,7 +40,7 @@ the resolver must authenticate them at execution time under the
 [Core verification policy](quality-gates.md#core-verification).
 Original migration records continue to identify the initial imported sources.
 
-The released changelog is `## [v0.2.0] - 2026-10-27`. Its GitHub Release
+The changelog section for this release is `## [0.2.0] - 2026-10-27`. Its GitHub Release
 contains Linux/Windows Lua 5.4 module archives, `release-manifest.json` and
 `SHA256SUMS`, but no release rockspec or source rock. Do not redispatch this
 existing tag for LuaRocks; it predates the required packaging changes.
@@ -50,7 +58,7 @@ LuaRocks upload is outside this candidate's publication requirements.
 ## First LuaRocks release (#46)
 
 The next Lua release candidate is **v0.3.0**, with rock version **0.3.0-1**.
-The candidate changelog is closed as `## [v0.3.0] - 2026-10-29`. Core
+The candidate changelog is closed as `## [0.3.0] - 2026-10-29`. Core
 remains v0.8.0 at the pin above. Neither a prepared candidate nor these
 instructions authorize GitHub or LuaRocks publication.
 

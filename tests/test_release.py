@@ -6,6 +6,7 @@ from copy import deepcopy
 import hashlib
 import os
 from pathlib import Path
+import re
 import sys
 import tempfile
 import unittest
@@ -43,12 +44,40 @@ class Release(unittest.TestCase):
                     support.request_identity('0.2.0', sha)
 
     def test_closed_changelog(self):
-        good = '# Changes\n\n## [v0.2.0] - 2026-10-19\n\n- New gates.\n'
+        good = '# Changes\n\n## [0.2.0] - 2026-10-19\n\n- New gates.\n'
         release.closed_changelog(good, 'v0.2.0')
-        for text in (good + 'Unreleased', good.replace('v0.2.0', '0.2.0'),
+        for text in (good + 'Unreleased', good.replace('[0.2.0]', '[v0.2.0]'),
+                     good.replace('[0.2.0]', '[0.3.0]'), good.replace('[0.2.0]', '[00.2.0]'),
                      good.replace('10-19', '02-30'), good.replace('- New gates.', ''), '# Changes'):
             with self.subTest(text=text), self.assertRaises(ValueError):
                 release.closed_changelog(text, 'v0.2.0')
+
+    def test_changelog_version_does_not_relax_git_tag_syntax(self):
+        for version in ('0.0.0', '0.3.0', '12.34.56'):
+            text = f'# Changes\n\n## [{version}] - 2026-10-29\n\n- Release.\n'
+            with self.subTest(version=version):
+                release.closed_changelog(text, 'v' + version)
+                with self.assertRaisesRegex(ValueError, 'Tag must be'):
+                    release.closed_changelog(text, version)
+        for tag in ('v01.2.0', 'vv0.3.0', 'v0.3.0-rc.1', 'main', ''):
+            with self.subTest(tag=tag), self.assertRaisesRegex(ValueError, 'Tag must be'):
+                release.closed_changelog('# Changes\n\n## [0.3.0] - 2026-10-29\n\n- Release.\n', tag)
+
+    def test_repository_release_headings_use_plain_versions(self):
+        text = (release.ROOT / 'CHANGELOG.md').read_text(encoding='utf-8')
+        sections = re.split(r'^## ', text, flags=re.MULTILINE)[1:]
+        self.assertTrue(sections, 'The changelog must retain release history')
+        releases = []
+        for index, section in enumerate(sections):
+            heading = section.splitlines()[0]
+            if heading == '[Unreleased]':
+                self.assertEqual(index, 0, 'Unreleased belongs before release history')
+                continue
+            match = re.fullmatch(r'\[(' + support.VERSION + r')\] - \d{4}-\d{2}-\d{2}', heading)
+            self.assertIsNotNone(match, heading)
+            release.closed_changelog('# Changes\n\n## ' + section, 'v' + match[1])
+            releases.append(match[1])
+        self.assertTrue(releases, 'The changelog must retain release history')
 
     def test_invalid_tags_do_not_reach_remote(self):
         with patch.object(release, 'api') as api:
@@ -195,6 +224,9 @@ class Release(unittest.TestCase):
                                         {'ref': 'refs/tags/v0.2.0', 'sha': request['commit']})
                     self.assertTrue((root / 'build/docs-release/release.json').is_file())
                     self.assertEqual(command.call_args.args[:3], ('gh', 'release', 'create'))
+                    arguments = command.call_args.args
+                    self.assertEqual(arguments[3], 'v0.2.0')
+                    self.assertEqual(arguments[arguments.index('--title') + 1], 'OpenTLV Lua 0.2.0')
 
     def test_incomplete_same_attempt_jobs_never_publish(self):
         request = {'run_attempt': '1', 'commit': 'a' * 40}
