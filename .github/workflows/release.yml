@@ -31,6 +31,11 @@ jobs:
           name: lua-request-${{ github.run_attempt }}
           path: build/request.json
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lua-release-preview-${{ github.run_attempt }}
+          path: docs/release-preview.md
+          if-no-files-found: error
   full-ci:
     needs: prepare
     permissions:
@@ -69,6 +74,9 @@ jobs:
       - env:
           GH_TOKEN: ${{ github.token }}
         run: python -B scripts/release.py assemble
+      - name: Show prepared release description
+        shell: bash
+        run: cat build/release/release-notes.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/attest-build-provenance@v3
         with:
           subject-path: build/release/*

@@ -17,6 +17,7 @@ from lua_package import PACKAGE_TESTS
 from lua_policy import PACKAGES, configuration, gate, matrix, validate_inventory, check_results
 from release_support import TAG, api, attempt_jobs, request_identity, verify_remote
 from verified_core import authenticated_release, checksums, lock, safe_name
+import release_notes
 
 REPOSITORY = 'OpenTLV/opentlv-lua'
 SIGNER = REPOSITORY + '/.github/workflows/release.yml'
@@ -41,6 +42,7 @@ def preflight(tag):
     require(request['lua_sha'] == request['workflow_sha'] == selected['commit'], 'Release requires dispatch SHA')
     require(not run('git', 'status', '--porcelain', capture=True), 'Dirty release checkout')
     closed_changelog((ROOT / 'CHANGELOG.md').read_text(encoding='utf-8'), tag)
+    release_notes.reviewed(ROOT, tag)
     verify_remote(request)
     request.update(selected)
     request['core_lock'] = lock(True)
@@ -106,6 +108,9 @@ def assemble(request, quality, evidence, output):
     require(rock_path.name == rock['rock'] and digest(rock_path) == rock['sha256'] and
             digest(rockspec_path) == rock['rockspec_sha256'], 'Release rock differs from the tested source rock')
     write(output / 'release-manifest.json', {'schema': 1, 'request': request, 'quality': quality})
+    changelog, editorial = release_notes.reviewed(ROOT, request['tag'])
+    body = release_notes.render(read(output / 'release-manifest.json'), changelog, editorial)
+    (output / release_notes.NOTES).write_bytes(body.encode('utf-8'))
     paths = sorted(output.iterdir())
     (output / 'SHA256SUMS').write_text(''.join(f'{digest(p)}  {p.name}\n' for p in paths), encoding='utf-8')
 
@@ -122,7 +127,8 @@ def verify_payload(directory):
             'Incomplete module inventory')
     rock = release_rock(quality, request)
     rockspec = rock['rock'].removesuffix('.src.rock') + '.rockspec'
-    expected = {'release-manifest.json', rock['rock'], rockspec, *(r['package']['filename'] for r in packages)}
+    expected = {'release-manifest.json', release_notes.NOTES, rock['rock'], rockspec,
+                *(r['package']['filename'] for r in packages)}
     sums = checksums(directory / 'SHA256SUMS')
     require(set(sums) == expected and {p.name for p in directory.iterdir()} == expected | {'SHA256SUMS'},
             'Unexpected release files')
@@ -133,6 +139,10 @@ def verify_payload(directory):
             'Release rock digest changed')
     for name, checksum in sums.items():
         require(digest(directory / name) == checksum, 'Modified release asset')
+    changelog, editorial = release_notes.reviewed(ROOT, request['tag'])
+    require((directory / release_notes.NOTES).read_bytes() ==
+            release_notes.render(manifest, changelog, editorial).encode('utf-8'),
+            'Release description differs from reviewed sources and verified evidence')
     for path in sorted(directory.iterdir()):
         run('gh', 'attestation', 'verify', path, '--repo', REPOSITORY,
             '--signer-workflow', SIGNER, '--source-digest', request['commit'])
@@ -152,7 +162,8 @@ def publish(directory):
     created = api(REPOSITORY + '/git/refs', {'ref': 'refs/tags/' + request['tag'], 'sha': request['commit']})
     require(created.get('object', {}).get('sha') == request['commit'], 'Unexpected created tag')
     run('gh', 'release', 'create', request['tag'], '--repo', REPOSITORY, '--verify-tag',
-        '--title', 'OpenTLV Lua ' + request['version'], '--generate-notes', *sorted(directory.iterdir()))
+        '--title', 'OpenTLV Lua ' + request['version'], '--notes-file', directory / release_notes.NOTES,
+        *sorted(directory.iterdir()))
     released = api(REPOSITORY + '/releases/tags/' + request['tag'])
     require(released.get('tag_name') == request['tag'] and released.get('draft') is False and
             released.get('prerelease') is False and bool(released.get('published_at')) and

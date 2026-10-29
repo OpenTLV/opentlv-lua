@@ -62,7 +62,8 @@ class ReleaseReceiptTests(unittest.TestCase):
                     patch.object(release, 'run') as run:
                 release.publish(self.assets)
                 run.assert_called_once_with('gh', 'release', 'create', tag, '--repo', release.REPOSITORY,
-                                            '--verify-tag', '--title', 'OpenTLV Lua ' + version, '--generate-notes')
+                                            '--verify-tag', '--title', 'OpenTLV Lua ' + version,
+                                            '--notes-file', self.assets / 'release-notes.md')
                 self.assertIn((release.REPOSITORY + '/git/refs',
                                {'ref': 'refs/tags/' + tag, 'sha': self.request['commit']}), self.calls)
 

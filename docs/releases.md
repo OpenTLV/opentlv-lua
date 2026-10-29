@@ -21,6 +21,9 @@ selects the exact dispatch SHA, even if main advances during verification.
 GitHub Release display titles use `OpenTLV Lua X.Y.Z`, for example
 `OpenTLV Lua 0.3.0`. The publisher takes this version from the validated
 release request; Git tags retain `vX.Y.Z` and LuaRocks retains `X.Y.Z-1`.
+Review the [Lua release-description preview and template](release-notes.md)
+before dispatch; the body is generated from the approved changelog and verified
+release evidence, with issue links in the release body.
 Changes to an unreleased candidate must be reviewed and revalidated before
 dispatch. An approved or running release continues to use its locked commit
 and release scripts.
@@ -97,7 +100,8 @@ Always-running aggregate validation rejects missing, failed, cancelled,
 duplicate or skipped required evidence. The assembler revalidates the original
 request and dependency lock, actual test/package records and exact run attempt.
 It creates two tested Lua 5.4 module archives, the release rockspec and source
-rock, a manifest and SHA256SUMS, then attests every file. It rebuilds
+rock, a manifest, the deterministic `release-notes.md` and SHA256SUMS, then
+attests every file. It rebuilds
 `opentlv-<version>-1.rockspec` and `opentlv-<version>-1.src.rock` from the
 release commit and requires the digests that every static-Core configuration
 recorded when it installed them. The publisher verifies identities, digests, attestations and
