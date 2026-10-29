@@ -37,6 +37,12 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # The source override takes precedence over package discovery. Otherwise use an
 # installed package, then the exact released Core baseline; never a moving branch.
+# Consumers of a versioned rockspec cannot preconfigure a Core selection, so an
+# unrelated installed OpenTLV package must not replace the pin. Declare reads
+# this mode; setting it later has no effect.
+if(NOT "${OPENTLV_LUA_RELEASE_TAG}" STREQUAL "")
+    set(FETCHCONTENT_TRY_FIND_PACKAGE_MODE NEVER)
+endif()
 FetchContent_Declare(opentlv_core
     GIT_REPOSITORY https://github.com/OpenTLV/opentlv.git
     GIT_TAG 345c77acb29266036df5f27d04ce315bb61853cc
@@ -102,3 +108,31 @@ foreach(_feature IN LISTS _core_features)
     endif()
 endforeach()
 message(STATUS "Lua Core configuration: ${_core_config}")
+
+# The rock installs rock-doc into its documentation directory: the module links
+# Core, so it carries Core's license as well as Lua's. Installed Core packages
+# keep it in <prefix>/share/doc/OpenTLV beside <libdir>/cmake/OpenTLV.
+set(_core_license "")
+if(opentlv_core_SOURCE_DIR)
+    set(_core_license "${opentlv_core_SOURCE_DIR}/LICENSE")
+else()
+    # FetchContent's package discovery searches under the dependency name.
+    set(_core_package "${opentlv_core_DIR}")
+    if(OPENTLV_LUA_CORE_PACKAGE)
+        set(_core_package "${OpenTLV_DIR}")
+    endif()
+    foreach(_parent IN ITEMS ../../.. ../../../..)
+        if(NOT _core_license AND EXISTS "${_core_package}/${_parent}/share/doc/OpenTLV/LICENSE")
+            set(_core_license "${_core_package}/${_parent}/share/doc/OpenTLV/LICENSE")
+        endif()
+    endforeach()
+endif()
+file(REMOVE_RECURSE "${CMAKE_CURRENT_BINARY_DIR}/rock-doc")
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rock-doc")
+if(_core_license AND EXISTS "${_core_license}")
+    file(COPY_FILE "${_core_license}" "${CMAKE_CURRENT_BINARY_DIR}/rock-doc/LICENSE-Core")
+elseif(NOT "${OPENTLV_LUA_RELEASE_TAG}" STREQUAL "")
+    message(FATAL_ERROR "The selected Core has no LICENSE for the release rock.")
+else()
+    message(WARNING "The selected Core's LICENSE was not found; a rock omits LICENSE-Core.")
+endif()

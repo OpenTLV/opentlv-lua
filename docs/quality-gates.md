@@ -62,6 +62,11 @@ The Full matrix has 17 configurations:
 All configurations require the complete Lua CTest/Busted suite and shared Query
 corpus through the public Lua facade. Non-sanitizer configurations also install
 and load a fresh LuaRocks tree, using static Core from the same source identity.
+The 13 static-Core configurations then install the
+[release source rock](versioning.md#supported-luarocks-targets) of the tested
+commit into another fresh tree, with the pinned Core fetched as a consumer
+would, and run the relocated module scripts and Query corpus against it. The
+aggregate gate requires identical source rock digests from all of them.
 Two static Lua 5.4 configurations (Linux/Windows x64) additionally test an
 installed Core package, reject missing/conflicting explicit package selections,
 and validate a relocated module archive. macOS and other Lua ABIs are tested,

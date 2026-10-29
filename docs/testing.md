@@ -73,6 +73,10 @@ spaces in its path, checks installed version metadata and loads both modules
 from outside the checkout. Packaging uses static Core from the same source
 identity. The installed runtime search paths exclude inherited Lua initialization
 settings. Windows uses PowerShell/MSVC so Git Bash cannot shadow `link.exe`.
+With static Core, `--rocks` also builds the commit's
+[release source rock](versioning.md#supported-luarocks-targets) and installs it
+into a second fresh tree, fetching the pinned Core from GitHub; `--release`
+requires the `RELEASE_TAG` tag to select the checkout, other runs use `v0.0.0`.
 
 The two official Lua 5.4 package configurations additionally run twelve Lua scripts
 and the full Query corpus after extraction, with only the archive module paths.

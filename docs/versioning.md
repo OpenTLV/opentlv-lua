@@ -116,3 +116,56 @@ either reports `scm+unknown`, so the generator rejects them, and the first rock
 must come from a later release tag. The release gate publishes validated module
 archives and a GitHub Release. It does not generate a release rockspec or
 upload to LuaRocks; upload requires separate approval.
+
+### Release rock contents and Core
+
+`luarocks install` builds the release rock on the consumer's machine. It
+installs `opentlv/_core` in the tree's native module directory,
+`opentlv/init.lua` in its Lua directory, and the generated rockspec,
+`lua-version.json` and a `doc` directory in
+`lib/luarocks/rocks-<lua-abi>/opentlv/<version>-<revision>`. `doc` holds
+`LICENSE-Core`, Core's license, because the module statically links Core, and
+LuaRocks adds Lua's `LICENSE`, the README and the changelog.
+
+A release rock always builds the pinned Core from
+`https://github.com/OpenTLV/opentlv.git` at the SHA in `cmake/Core.cmake`, as a
+static library. Its consumers cannot preconfigure a Core selection, so with
+`OPENTLV_LUA_RELEASE_TAG` set CMake does not search for installed OpenTLV
+packages: an unrelated installed Core cannot replace the pin. An explicit
+`OPENTLV_LUA_CORE_PACKAGE` or source override is still honored. The Git SHA
+selects the exact commit, but the consumer build does not check Core's release
+attestations like the CI resolver does. Building the rock requires CMake 3.24 or
+newer, a C compiler, Git and network access to GitHub. The installed module
+needs only the Lua runtime it was built for, as declared by `lua >= 5.1`.
+
+### Supported LuaRocks targets
+
+The release rock is validated on Linux, Windows and macOS with Lua 5.1, 5.2,
+5.3 and 5.4, and on Linux with LuaJIT 2.1, the static-Core rows of the
+[Full matrix](quality-gates.md). Windows builds need MSVC and the
+interpreter's shared Lua DLL, as described in the
+[LuaRocks installation guide](development.md#luarocks-installation). Other
+platforms, architectures, toolchains and LuaJIT on Windows/macOS are not
+validated.
+
+Full CI builds the source rock (`opentlv-<version>-1.src.rock`) of the tested
+commit as `luarocks pack` would: the generated rockspec and the commit's files
+in `opentlv-lua/`, without `.git` and `.gitignore`. The entries are stored
+uncompressed in commit order with a fixed timestamp, and line endings are never
+converted, so every platform builds the same bytes. Each static-Core
+configuration then unpacks that source rock and makes it into a fresh tree,
+which is what `luarocks install` does in a temporary directory, without a Core
+override. It checks:
+
+- the fetched Core commit against the pin;
+- the installed rockspec, `opentlv/init.lua`, `LICENSE` and `LICENSE-Core`
+  against the commit and the verified Core source;
+- the release metadata (version and tag, empty revision, not dirty);
+- that `require("opentlv")` loads the tree's native module, using only the
+  tree's search paths;
+- the twelve relocated module scripts, the Query corpus and the quick start.
+
+Release runs use the candidate tag, which must select the tested commit. Other
+Full runs use the fixture tag `v0.0.0`. The aggregate gate requires this evidence
+from every static-Core rocks configuration, and the same source rock and
+rockspec digests from all of them.

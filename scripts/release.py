@@ -55,6 +55,8 @@ def check_quality(quality, request):
     check_results(quality.get('checks', {}), 'full')
     validate_inventory(quality.get('records', []), 'full', release=True,
                        core_lock=request['core_lock'], core_release=request['core_release'])
+    require(all(r['release_rock']['tag'] == request['tag'] for r in quality['records'] if r.get('release_rock')),
+            'Release rocks must be built for the requested tag')
 
 
 def check_package(record, request):

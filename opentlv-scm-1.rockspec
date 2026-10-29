@@ -47,9 +47,12 @@ build = {
    -- Installs both halves of the native/pure split (see README.md):
    -- opentlv._core (the compiled module) and lua/opentlv/init.lua, the
    -- one-line pure-Lua file require("opentlv") actually resolves to.
+   -- rock-doc holds LICENSE-Core; LuaRocks then adds LICENSE and the root
+   -- Markdown files to the same documentation directory.
    install_command = 'cmake -E make_directory "$(LIBDIR)/opentlv" && ' ..
       'cmake -E copy "build/luarocks/opentlv/_core.$(LIB_EXTENSION)" "$(LIBDIR)/opentlv/_core.$(LIB_EXTENSION)" && ' ..
       'cmake -E make_directory "$(LUADIR)/opentlv" && ' ..
       'cmake -E copy lua/opentlv/init.lua "$(LUADIR)/opentlv/init.lua" && ' ..
-      'cmake -E copy build/luarocks/lua-version.json "$(PREFIX)/lua-version.json"'
+      'cmake -E copy build/luarocks/lua-version.json "$(PREFIX)/lua-version.json" && ' ..
+      'cmake -E copy_directory build/luarocks/rock-doc "$(PREFIX)/doc"'
 }
