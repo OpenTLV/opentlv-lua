@@ -6,9 +6,12 @@ project(OpenTLVLua LANGUAGES C)
 
 set(LUA_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}")
 set(LUA_BINARY "${CMAKE_CURRENT_BINARY_DIR}")
+set(OPENTLV_LUA_RELEASE_TAG "" CACHE STRING
+    "Lua release tag of a versioned rockspec, for a source tree without Git")
 include(cmake/GenerateVersion.cmake)
 add_custom_target(opentlv_lua_version
     COMMAND "${CMAKE_COMMAND}" "-DLUA_SOURCE=${LUA_SOURCE}" "-DLUA_BINARY=${LUA_BINARY}"
+        "-DOPENTLV_LUA_RELEASE_TAG=${OPENTLV_LUA_RELEASE_TAG}"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateVersion.cmake"
     BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/lua-version.json"
         "${CMAKE_CURRENT_BINARY_DIR}/generated/lua-version.h"

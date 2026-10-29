@@ -12,7 +12,8 @@ version value at configuration time and refreshes both whenever `opentlv_lua`
 is built. A version change recompiles the module, keeping its public API and
 packaged metadata consistent without a second version constant. The rock copies the JSON file into
 its versioned LuaRocks directory, normally
-`<tree>/lib/luarocks/rocks-<lua-abi>/opentlv/scm-1/lua-version.json`.
+`<tree>/lib/luarocks/rocks-<lua-abi>/opentlv/<rock-version>/lua-version.json`,
+for example `scm-1` or `0.3.0-1`.
 
 | Field | Meaning |
 | --- | --- |
@@ -34,7 +35,13 @@ The source directory must be the Git repository root. Core's tags and tags in
 an enclosing workspace never supply Lua metadata. A source archive without
 its own Git identity reports `scm+unknown` and an empty revision/tag; `dirty`
 is false because there is no Git worktree status to inspect. This does not
-establish archive provenance. A shallow checkout only knows tags actually
+establish archive provenance. A build of such a tree can declare its release
+with `OPENTLV_LUA_RELEASE_TAG=vMAJOR.MINOR.PATCH`, as a
+[versioned rockspec](#luarocks-release-rockspec) does; it then reports that
+version and tag with an empty revision and `dirty` false. The declaration is
+not verified. In a Git checkout the setting never replaces the checkout's own
+metadata: configuration fails unless the checkout reports that release tag,
+and a modified checkout at the tag still reports its dirty version. A shallow checkout only knows tags actually
 fetched; fetch the intended release tag to identify a release. CI checks out
 the full history and tags.
 
@@ -67,23 +74,45 @@ changelog and merge to `main`. Dispatch the manual gate with its only input
 private local candidate tag, so validated artifacts contain release metadata
 before the publisher creates the remote tag. See [release instructions](releases.md).
 
-LuaRocks publication is a separate follow-up. Once the `v0.1.0` tag exists, a
-versioned copy of the existing rockspec uses:
+## LuaRocks release rockspec
 
-```lua
-version = "0.1.0-1"
-source = {
-   url = "git+https://github.com/OpenTLV/opentlv-lua.git",
-   tag = "v0.1.0"
-}
+LuaRocks publication is tracked in
+[Lua #42](https://github.com/OpenTLV/opentlv-lua/issues/42). The rock stays one
+`opentlv` package containing the native `opentlv._core` module and the pure-Lua
+`opentlv` facade. On 2026-10-29 the LuaRocks root manifests for Lua 5.1–5.4
+contained no `opentlv` rock, a module search found none, and the upload account
+[`marekcingel`](https://luarocks.org/modules/marekcingel) (website
+`github.com/OpenTLV`) existed with no modules. LuaRocks names are claimed by
+upload, not reserved, so recheck both immediately before the first upload.
+
+`scripts/rockspec.py` generates a release rockspec from the development
+rockspec of an existing release tag:
+
+```sh
+python scripts/rockspec.py v0.3.0             # build/rockspecs/opentlv-0.3.0-1.rockspec
+python scripts/rockspec.py v0.3.0 --revision 2
+python scripts/rockspec.py v0.3.0 --worktree  # candidate before the tag exists
 ```
 
-Its filename is `opentlv-0.1.0-1.rockspec`. The final `-1` is the LuaRocks
-packaging revision, not part of the Git tag or the public Lua binding version.
-Thus `opentlv-0.1.0-1.rockspec` built from clean tag `v0.1.0` reports `0.1.0`
-through both Lua APIs and `lua-version.json`. The development rock's `scm-1`
-identifies its rolling package channel; its exact build version is in the API
-and JSON metadata. Keep the existing
-build/install commands; the development rockspec stays `scm-1`. Validate the
-release checkout and installed modules before publication. The quality gate publishes validated module archives and a GitHub Release. It
-does not create a versioned release rockspec or publish to LuaRocks.
+It changes exactly three things: `version = "0.3.0-1"`, a `tag = "v0.3.0"`
+line in `source`, and `-DOPENTLV_LUA_RELEASE_TAG=v0.3.0` instead of the empty
+value in `build_command`. The package name, description, license, dependencies
+and the native/pure-Lua build and install commands remain those of the tag's
+`opentlv-scm-1.rockspec`. The final `-1` is the LuaRocks packaging revision,
+not part of the Git tag or the public Lua binding version; increment it only to
+repackage the same tag.
+
+The release definition is required because LuaRocks clones the tag with
+`--depth=1` and deletes `.git` before building, so the Git metadata above
+reports `scm+unknown`. With the declaration, `opentlv-0.3.0-1.rockspec`
+reports `0.3.0` through both Lua APIs and `lua-version.json`, and
+`release_tag` `v0.3.0`, with an empty revision. `luarocks make` of a versioned
+rockspec in a Git checkout fails unless that checkout is at the tag.
+The development rock's `scm-1` identifies its rolling package channel; its
+exact build version is in the API and JSON metadata.
+
+Tags `v0.1.0` and `v0.2.0` predate the declaration: a LuaRocks build from
+either reports `scm+unknown`, so the generator rejects them, and the first rock
+must come from a later release tag. The release gate publishes validated module
+archives and a GitHub Release. It does not generate a release rockspec or
+upload to LuaRocks; upload requires separate approval.

@@ -38,8 +38,11 @@ build = {
    -- internally, are not exposed to build_command/install_command; using
    -- any of them here is a silent no-op, warned as "unmatched variable"
    -- and substituted as empty), so this does not attempt to pass one.
+   -- The development rock declares no release; scripts/rockspec.py sets the
+   -- tag in a versioned copy, whose LuaRocks source has no Git metadata.
    build_command = 'cmake -S . -B build/luarocks -DCMAKE_BUILD_TYPE=Release ' ..
-      '-DOPENTLV_BUILD_LUA_TESTS=OFF "-DLUA_INCLUDE_DIR=$(LUA_INCDIR)" && ' ..
+      '-DOPENTLV_BUILD_LUA_TESTS=OFF "-DLUA_INCLUDE_DIR=$(LUA_INCDIR)" ' ..
+      '"-DOPENTLV_LUA_RELEASE_TAG=" && ' ..
       'cmake --build build/luarocks --target opentlv_lua --config Release',
    -- Installs both halves of the native/pure split (see README.md):
    -- opentlv._core (the compiled module) and lua/opentlv/init.lua, the

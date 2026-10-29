@@ -227,6 +227,13 @@ directory and `opentlv/init.lua` in its Lua source directory. It also stores
 `lua-version.json` in the versioned rock directory. See
 [independent versioning](versioning.md) for its meaning and release baseline.
 
+`scripts/rockspec.py vMAJOR.MINOR.PATCH` generates the
+[release rockspec](versioning.md#luarocks-release-rockspec) of a release tag
+in `build/rockspecs`. Its build passes `OPENTLV_LUA_RELEASE_TAG`, because
+LuaRocks builds a release from a tag clone without `.git`; `luarocks make`
+with it from a checkout succeeds only at that tag. Use `opentlv-scm-1.rockspec`
+for development builds.
+
 ## Contributing and licensing
 
 The shared
