@@ -54,6 +54,18 @@ class ReleaseReceiptTests(unittest.TestCase):
             release.publish(self.assets)
         self.assertFalse((self.root / "build/docs-release/release.json").exists())
 
+    def test_release_titles_use_version_while_git_refs_keep_v(self):
+        for version in ('0.3.0', '12.34.56'):
+            tag = 'v' + version
+            with self.subTest(version=version), patch.dict(self.request, version=version, tag=tag), \
+                    patch.dict(self.released, tag_name=tag), patch.object(release, 'api', side_effect=self.api), \
+                    patch.object(release, 'run') as run:
+                release.publish(self.assets)
+                run.assert_called_once_with('gh', 'release', 'create', tag, '--repo', release.REPOSITORY,
+                                            '--verify-tag', '--title', 'OpenTLV Lua ' + version, '--generate-notes')
+                self.assertIn((release.REPOSITORY + '/git/refs',
+                               {'ref': 'refs/tags/' + tag, 'sha': self.request['commit']}), self.calls)
+
     def test_draft_or_mismatched_release_never_emits_receipt(self):
         for change in ({"draft": True}, {"id": True}, {"published_at": None}, {"tag_name": "v0.2.0"}):
             with patch.dict(self.released, change), patch.object(release, "api", side_effect=self.api), \
