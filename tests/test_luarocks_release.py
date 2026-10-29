@@ -150,9 +150,13 @@ class LuaRocksPublication(unittest.TestCase):
             self.assertNotIn(KEY, str(caught.exception))
             self.assertIsNone(caught.exception.__cause__)
         self.server.fail = None
-        with patch.object(Server, 'json', staticmethod(lambda value: Response(b'{"errors": ["Invalid key"]}'))):
-            with self.assertRaisesRegex(ValueError, 'rejected the request: Invalid key'):
+        # A server error may quote the request, including the key in its URL path.
+        echoed = json.dumps({'errors': [f'Invalid key {KEY}', f'/api/1/{KEY}/check_rockspec']}).encode()
+        with patch.object(Server, 'json', staticmethod(lambda value: Response(echoed))):
+            with self.assertRaisesRegex(ValueError, r'^LuaRocks check_rockspec rejected the request$') as caught:
                 self.publish()
+            self.assertNotIn(KEY, str(caught.exception))
+            self.assertIsNone(caught.exception.__cause__)
         for key in ('', 'short', 'has/slash/and-is-long-enough', 'x' * 15):
             with self.subTest(key=key), self.assertRaisesRegex(ValueError, 'LUAROCKS_API_KEY'):
                 publication.LuaRocks(key)

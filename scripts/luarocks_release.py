@@ -138,7 +138,7 @@ class LuaRocks:
             raise ValueError(f'LuaRocks {label} failed: no valid response') from None
         require(isinstance(result, dict), f'LuaRocks {label} returned an invalid response')
         errors = result.get('errors')
-        require(not errors, f'LuaRocks {label} rejected the request: ' + ', '.join(map(str, errors or [])))
+        require(not errors, f'LuaRocks {label} rejected the request')
         return result
 
 
