@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Regenerate the release preview after candidate changelog formatting changes so the checked-in description matches its source and passes the stale-preview CI checks. (#52)
 - Report only the method of a rejected LuaRocks API request, without the server's error text: a response that quotes the request could otherwise put the API key from its URL into CI logs. A regression test returns errors containing the key and checks that the exception omits it. (#45)
 
 ## [0.2.0] - 2026-10-27
