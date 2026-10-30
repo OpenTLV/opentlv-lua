@@ -272,8 +272,8 @@ consistently if it changes before publication.
 Record the registry URL, release/tag/SHA, both file digests, release and
 publication run URLs/attempts, environment approval evidence, consumer OS/Lua/
 LuaRocks/compiler versions, install and test logs, and documentation URLs in
-#46. Record failures and pending checks explicitly; do not mark the issue or
-epic complete until the actual public installation and documentation pass.
+issue #46. Record failures and pending checks explicitly; do not mark the issue
+or epic complete until the actual public installation and documentation pass.
 
 ## Automatic release documentation
 

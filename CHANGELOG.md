@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- Stop the wrapped issue reference in the LuaRocks release guide from starting a line with `#46.`, which the Docs portal rendered as a stray heading inside the paragraph and Markdown lint reports as MD018, failing the Docs PR gate for every component pin update. (#46)
+
 ## [0.3.0] - 2026-10-29
 
 ### Changed
